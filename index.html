@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyGourmet</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: '#f0f9ff',
+                100: '#e0f2fe',
+                500: '#0ea5e9',
+                600: '#0284c7',
+                700: '#0369a1',
+              },
+            },
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+      #error-overlay { display: none; position: fixed; inset: 0; background: white; z-index: 9999; padding: 2rem; }
+    </style>
+</head>
+  <body>
+    <div id="root">
+       <!-- Visual Loading State -->
+       <div id="loading-spinner" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-family: sans-serif;">
+         <svg style="animation: spin 1s linear infinite; width: 40px; height: 40px; margin-bottom: 1rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+           <circle style="opacity: 0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+           <path style="opacity: 0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+         </svg>
+         <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: #334155;">MyGourmet wird geladen</h2>
+         <p style="font-size: 0.875rem;">Einen Moment bitte...</p>
+         <style>
+           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+         </style>
+       </div>
+    </div>
+
+    <!-- Error Overlay -->
+    <div id="error-overlay">
+      <h1 style="color: #dc2626; font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Startfehler</h1>
+      <p style="margin-bottom: 1rem;">Die Anwendung konnte nicht innerhalb des Zeitlimits gestartet werden.</p>
+      <div id="error-log" style="background: #f1f5f9; padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.85rem; color: #334155; white-space: pre-wrap;"></div>
+      <button onclick="window.location.reload()" style="margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #0f172a; color: white; border: none; border-radius: 0.5rem; cursor: pointer;">Seite neu laden</button>
+    </div>
+
+    <!-- Watchdog Script -->
+    <script>
+      (function() {
+        window.appMounted = false;
+        var logs = [];
+        
+        // Capture logs
+        var originalLog = console.log;
+        var originalError = console.error;
+        console.log = function() { logs.push('[LOG] ' + Array.from(arguments).join(' ')); originalLog.apply(console, arguments); };
+        console.error = function() { logs.push('[ERR] ' + Array.from(arguments).join(' ')); originalError.apply(console, arguments); };
+
+        // Global Error Handler
+        window.onerror = function(msg, url, line) {
+          logs.push('[FATAL] ' + msg + ' @ ' + url + ':' + line);
+        };
+
+        // Timeout Watchdog
+        setTimeout(function() {
+          if (!window.appMounted) {
+            document.getElementById('root').style.display = 'none';
+            document.getElementById('error-overlay').style.display = 'block';
+            document.getElementById('error-log').textContent = logs.join('\n') || "Keine Logs verfügbar. Syntaxfehler im Modul oder ImportMap Konflikt.";
+          }
+        }, 6000); 
+      })();
+    </script>
+    
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
