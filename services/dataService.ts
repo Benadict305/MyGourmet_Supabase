@@ -465,6 +465,8 @@ export const dataService = {
       }
 
       const html = await response.text();
+      // DEBUG: Log the received HTML to the console
+      console.log("Vom Proxy empfangener HTML-Inhalt:", html);
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
