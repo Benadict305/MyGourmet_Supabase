@@ -112,7 +112,7 @@ export const dataService = {
         .select(`
           *,
           ingredients:mygourmet_ingredients (*),
-          dish_tags:mygourmet_dish_tags (tagname)
+          dish_tags:mygourmet_dish_tags (tag_name)
         `);
 
       if (error) throw error;
@@ -120,7 +120,7 @@ export const dataService = {
       return (data || []).map((d: any) => ({
         ...d,
         ingredients: d.ingredients || [],
-        tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []
+        tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tag_name) : []
       }));
     } catch (e) {
       console.error("Failed to fetch dishes from Supabase", e);
@@ -147,10 +147,10 @@ export const dataService = {
           name: newDish.name,
           image: newDish.image,
           rating: newDish.rating,
-          recipeLink: newDish.recipeLink,
+          recipe_link: newDish.recipeLink,
           notes: newDish.notes,
-          timesCooked: newDish.timesCooked,
-          lastCooked: newDish.lastCooked
+          times_cooked: newDish.timesCooked,
+          last_cooked: newDish.lastCooked
         }]);
 
       if (dishError) throw dishError;
@@ -159,7 +159,7 @@ export const dataService = {
       if (newDish.ingredients.length > 0) {
         const ingredientsToInsert = newDish.ingredients.map(ing => ({
           id: generateId(),
-          dishId: newDish.id,
+          dish_id: newDish.id,
           name: ing.name,
           amount: ing.amount,
           unit: ing.unit
@@ -171,8 +171,8 @@ export const dataService = {
       // Insert tags
       if (newDish.tags && newDish.tags.length > 0) {
         const tagsToInsert = newDish.tags.map(tag => ({
-          dishId: newDish.id,
-          tagName: tag
+          dish_id: newDish.id,
+          tag_name: tag
         }));
         const { error: tagError } = await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
         if (tagError) throw tagError;
@@ -208,21 +208,21 @@ export const dataService = {
           name: dish.name,
           image: dish.image,
           rating: dish.rating,
-          recipeLink: dish.recipeLink,
+          recipe_link: dish.recipeLink,
           notes: dish.notes,
-          timesCooked: dish.timesCooked,
-          lastCooked: dish.lastCooked
+          times_cooked: dish.timesCooked,
+          last_cooked: dish.lastCooked
         })
         .eq('id', dish.id);
 
       if (dishError) throw dishError;
 
       // Update ingredients (delete and re-insert is simplest, though not most efficient)
-      await supabase.from('mygourmet_ingredients').delete().eq('dishId', dish.id);
+      await supabase.from('mygourmet_ingredients').delete().eq('dish_id', dish.id);
       if (dish.ingredients.length > 0) {
         const ingredientsToInsert = dish.ingredients.map(ing => ({
           id: generateId(), // Creating new IDs as we replaced them
-          dishId: dish.id,
+          dish_id: dish.id,
           name: ing.name,
           amount: ing.amount,
           unit: ing.unit
@@ -231,11 +231,11 @@ export const dataService = {
       }
 
       // Update tags
-      await supabase.from('mygourmet_dish_tags').delete().eq('dishId', dish.id);
+      await supabase.from('mygourmet_dish_tags').delete().eq('dish_id', dish.id);
       if (dish.tags && dish.tags.length > 0) {
         const tagsToInsert = dish.tags.map(tag => ({
-          dishId: dish.id,
-          tagName: tag
+          dish_id: dish.id,
+          tag_name: tag
         }));
         await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
       }
@@ -265,8 +265,8 @@ export const dataService = {
 
       const updatedDish = {
         ...dish,
-        timesCooked: Math.max(0, dish.timesCooked + (increment ? 1 : -1)),
-        lastCooked: increment ? new Date().toISOString() : dish.lastCooked
+        times_cooked: Math.max(0, dish.timesCooked + (increment ? 1 : -1)),
+        last_cooked: increment ? new Date().toISOString() : dish.lastCooked
       };
 
       await dataService.updateDish(updatedDish);
@@ -391,7 +391,7 @@ export const dataService = {
       const { data, error } = await supabase
         .from('mygourmet_categories')
         .select('name')
-        .order('sortorder', { ascending: true });
+        .order('sortOrder', { ascending: true });
 
       if (error) throw error;
 
@@ -419,7 +419,7 @@ export const dataService = {
       // Let's try upserting logic.
       const rows = categories.map((name, index) => ({
         name,
-        sortorder: index
+        sortOrder: index
       }));
 
       const { error } = await supabase.from('mygourmet_categories').upsert(rows);
