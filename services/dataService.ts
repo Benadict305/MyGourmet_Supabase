@@ -447,7 +447,18 @@ export const dataService = {
   },
 
   fetchRecipeData: async (url: string): Promise<any> => {
-    console.warn("Recipe scraping not implemented for Supabase yet");
-    return null;
+    try {
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      // For now, we just return a success indicator.
+      // The actual HTML parsing would be more complex.
+      return { success: true, url: url };
+    } catch (e) {
+      console.error(`Failed to fetch from ${url} via corsproxy.io`, e);
+      return { success: false, error: (e as Error).message };
+    }
   }
 };

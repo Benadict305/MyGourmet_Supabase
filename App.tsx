@@ -484,7 +484,7 @@ const App: React.FC = () => {
                       <span>Neues Gericht</span>
                     </button>
                   </div>
-                  <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                  <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
                     {renderCategoryButtons()}
                   </div>
                 </div>
@@ -504,7 +504,7 @@ const App: React.FC = () => {
                           />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+                      <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                          {renderCategoryButtons()}
                       </div>
                    </div>

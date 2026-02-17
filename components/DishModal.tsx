@@ -146,7 +146,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
     }
   };
 
-  const handleFetchRecipe = async () => {
+ const handleFetchRecipe = async () => {
     const url = editedDish.recipeLink;
     if (!url) return;
 
@@ -154,22 +154,15 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
     try {
       const recipeData = await dataService.fetchRecipeData(url);
 
-      // Populate fields if empty
-      if (!editedDish.name && recipeData.name) {
-        updateField('name', recipeData.name);
-      }
-      if (!editedDish.notes && recipeData.notes) {
-        updateField('notes', recipeData.notes);
-      }
-      if (!editedDish.image && recipeData.image) {
-        updateField('image', recipeData.image);
-      }
-      if (!editedDish.ingredients || editedDish.ingredients.length === 0) {
-        updateField('ingredients', recipeData.ingredients || []);
+      if (recipeData && recipeData.success) {
+        alert('Rezeptdaten erfolgreich abgerufen! (Weitere Integration zur Anzeige der Daten ist erforderlich)');
+        // Hier könnten Sie die Daten in einem anderen Modal oder Bereich anzeigen
+      } else {
+        throw new Error(recipeData.error || 'Unbekannter Fehler');
       }
     } catch (error) {
       console.error('Failed to fetch recipe:', error);
-      alert('Fehler beim Laden des Rezepts. Bitte überprüfen Sie die URL.');
+      alert(`Fehler beim Laden des Rezepts: ${(error as Error).message}`);
     } finally {
       setIsFetchingRecipe(false);
     }
