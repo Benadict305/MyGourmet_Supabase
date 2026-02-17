@@ -1,1 +1,533 @@
-\nimport { Dish, WeeklyPlan, Ingredient } from \'../types\';\nimport { DISH_CATEGORIES, MOCK_DISHES } from \'../constants\';\nimport { supabase } from \'../lib/supabase\';\n\nconsole.log(\"Initializing dataService (Supabase)...\");\n\nconst LS_KEYS = {\n  DISHES: \'mygourmet_dishes\',\n  PLANS: \'mygourmet_plans\',\n  CATEGORIES: \'mygourmet_categories\'\n};\n\n// In-Memory Fallback store in case LocalStorage is disabled/throws\nconst memoryStore: Record<string, any> = {};\n\n// Safe LocalStorage Wrapper\nconst safeStorage = {\n  getItem: (key: string): string | null => {\n    try {\n      return localStorage.getItem(key);\n    } catch (e) {\n      console.warn(\"LocalStorage access denied, using memory store\");\n      return memoryStore[key] || null;\n    }\n  },\n  setItem: (key: string, value: string): void => {\n    try {\n      localStorage.setItem(key, value);\n    } catch (e) {\n      memoryStore[key] = value;\n    }\n  }\n};\n\n// Polyfill for randomUUID\nexport const generateId = (): string => {\n  if (typeof crypto !== \'undefined\' && crypto.randomUUID) {\n    try {\n      return crypto.randomUUID();\n    } catch (e) { }\n  }\n  return \'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\'.replace(/[xy]/g, function (c) {\n    const r = Math.random() * 16 | 0, v = c === \'x\' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n};\n\n// State to track if we are forcing local storage due to API failure\nlet useLocalStorage = false;\n\n// Helper to initialize LocalStorage with Mock data if empty\nconst initLocalStorage = () => {\n  try {\n    if (!safeStorage.getItem(LS_KEYS.DISHES)) {\n      safeStorage.setItem(LS_KEYS.DISHES, JSON.stringify(MOCK_DISHES));\n    }\n    if (!safeStorage.getItem(LS_KEYS.PLANS)) {\n      safeStorage.setItem(LS_KEYS.PLANS, JSON.stringify([]));\n    }\n    if (!safeStorage.getItem(LS_KEYS.CATEGORIES)) {\n      safeStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(DISH_CATEGORIES));\n    }\n  } catch (e) {\n    console.error(\"Failed to init storage\", e);\n  }\n};\n\n// Initialize once\ninitLocalStorage();\n\n// Helper for Local Storage Operations\nconst localStore = {\n  get: <T>(key: string): T => {\n    try {\n      const item = safeStorage.getItem(key);\n      return item ? JSON.parse(item) : [];\n    } catch (e) {\n      console.error(\"Error parsing local data\", e);\n      return [] as unknown as T;\n    }\n  },\n  set: (key: string, data: any) => {\n    try {\n      safeStorage.setItem(key, JSON.stringify(data));\n    } catch (e) {\n      console.error(\"Error saving local data\", e);\n    }\n  }\n};\n\n// DB to App mapping\nconst mapDishFromDb = (d: any): Dish => ({\n  id: d.id,\n  name: d.name,\n  image: d.image,\n  rating: d.rating,\n  recipeLink: d.recipelink,\n  notes: d.notes,\n  timesCooked: d.timescooked,\n  lastCooked: d.lastcooked,\n  ingredients: d.ingredients || [],\n  tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []\n});\n\nexport const dataService = {\n  checkBackendConnection: async (): Promise<boolean> => {\n    try {\n      useLocalStorage = false;\n      const { error } = await supabase.from(\'mygourmet_categories\').select(\'count\', { count: \'exact\', head: true });\n      if (error) throw error;\n      return true;\n    } catch (e) {\n      console.warn(\"Supabase connection check failed, switching to local storage\", e);\n      useLocalStorage = true;\n      return false;\n    }\n  },\n\n  getDishes: async (): Promise<Dish[]> => {\n    if (useLocalStorage) return localStore.get<Dish[]>(LS_KEYS.DISHES);\n\n    try {\n      const { data, error } = await supabase\n        .from(\'mygourmet_dishes\')\n        .select(`\n          *,\n          ingredients:mygourmet_ingredients (*),\n          dish_tags:mygourmet_dish_tags (tagname)\n        `);\n\n      if (error) throw error;\n      return (data || []).map(mapDishFromDb);\n    } catch (e) {\n      console.error(\"Failed to fetch dishes from Supabase\", e);\n      useLocalStorage = true;\n      return localStore.get<Dish[]>(LS_KEYS.DISHES);\n    }\n  },\n\n  addDish: async (dish: Omit<Dish, \'id\'>): Promise<Dish> => {\n    const newDish = { ...dish, id: generateId() };\n\n    if (useLocalStorage) {\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      dishes.unshift(newDish as Dish);\n      localStore.set(LS_KEYS.DISHES, dishes);\n      return newDish as Dish;\n    }\n\n    try {\n      const { error: dishError } = await supabase\n        .from(\'mygourmet_dishes\')\n        .insert([{\n          id: newDish.id,\n          name: newDish.name,\n          image: newDish.image,\n          rating: newDish.rating,\n          recipelink: newDish.recipeLink,\n          notes: newDish.notes,\n          timescooked: newDish.timesCooked,\n          lastcooked: newDish.lastCooked\n        }]);\n\n      if (dishError) throw dishError;\n\n      if (newDish.ingredients.length > 0) {\n        const ingredientsToInsert = newDish.ingredients.map(ing => ({\n          dishid: newDish.id,\n          name: ing.name,\n          amount: ing.amount,\n          unit: ing.unit\n        }));\n        const { error: ingError } = await supabase.from(\'mygourmet_ingredients\').insert(ingredientsToInsert);\n        if (ingError) throw ingError;\n      }\n\n      if (newDish.tags && newDish.tags.length > 0) {\n        const tagsToInsert = newDish.tags.map(tag => ({\n          dishid: newDish.id,\n          tagname: tag\n        }));\n        const { error: tagError } = await supabase.from(\'mygourmet_dish_tags\').insert(tagsToInsert);\n        if (tagError) throw tagError;\n      }\n\n      return newDish as Dish;\n    } catch (e) {\n      console.error(\"Failed to add dish to Supabase\", e);\n      useLocalStorage = true;\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      dishes.unshift(newDish as Dish);\n      localStore.set(LS_KEYS.DISHES, dishes);\n      return newDish as Dish;\n    }\n  },\n\n  updateDish: async (dish: Dish): Promise<Dish> => {\n    if (useLocalStorage) {\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      const index = dishes.findIndex(d => d.id === dish.id);\n      if (index !== -1) {\n        dishes[index] = dish;\n        localStore.set(LS_KEYS.DISHES, dishes);\n      }\n      return dish;\n    }\n\n    try {\n      const { error: dishError } = await supabase\n        .from(\'mygourmet_dishes\')\n        .update({\n          name: dish.name,\n          image: dish.image,\n          rating: dish.rating,\n          recipelink: dish.recipeLink,\n          notes: dish.notes,\n          timescooked: dish.timesCooked,\n          lastcooked: dish.lastCooked\n        })\n        .eq(\'id\', dish.id);\n\n      if (dishError) throw dishError;\n\n      await supabase.from(\'mygourmet_ingredients\').delete().eq(\'dishid\', dish.id);\n      if (dish.ingredients.length > 0) {\n        const ingredientsToInsert = dish.ingredients.map(ing => ({\n          dishid: dish.id,\n          name: ing.name,\n          amount: ing.amount,\n          unit: ing.unit\n        }));\n        await supabase.from(\'mygourmet_ingredients\').insert(ingredientsToInsert);\n      }\n\n      await supabase.from(\'mygourmet_dish_tags\').delete().eq(\'dishid\', dish.id);\n      if (dish.tags && dish.tags.length > 0) {\n        const tagsToInsert = dish.tags.map(tag => ({\n          dishid: dish.id,\n          tagname: tag\n        }));\n        await supabase.from(\'mygourmet_dish_tags\').insert(tagsToInsert);\n      }\n\n      return dish;\n    } catch (e) {\n      console.error(\"Failed to update dish in Supabase\", e);\n      useLocalStorage = true;\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      const index = dishes.findIndex(d => d.id === dish.id);\n      if (index !== -1) {\n        dishes[index] = dish;\n        localStore.set(LS_KEYS.DISHES, dishes);\n      }\n      return dish;\n    }\n  },\n  \n  updateDishCookingStats: async (dishId: string, increment: boolean): Promise<void> => {\n    try {\n      const dishes = await dataService.getDishes();\n      const dish = dishes.find(d => d.id === dishId);\n      if (!dish) return;\n\n      const updatedDish: Dish = {\n        ...dish,\n        timesCooked: Math.max(0, (dish.timesCooked || 0) + (increment ? 1 : -1)),\n        lastCooked: increment ? new Date().toISOString() : dish.lastCooked\n      };\n\n      await dataService.updateDish(updatedDish);\n    } catch (error) {\n      console.error(\'Failed to update dish cooking stats:\', error);\n    }\n  },\n\n  deleteDish: async (id: string): Promise<void> => {\n    if (useLocalStorage) {\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      const filtered = dishes.filter(d => d.id !== id);\n      localStore.set(LS_KEYS.DISHES, filtered);\n      return;\n    }\n\n    try {\n      const { error } = await supabase.from(\'mygourmet_dishes\').delete().eq(\'id\', id);\n      if (error) throw error;\n    } catch (e) {\n      console.error(\"Failed to delete dish\", e);\n      useLocalStorage = true;\n      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);\n      const filtered = dishes.filter(d => d.id !== id);\n      localStore.set(LS_KEYS.DISHES, filtered);\n    }\n  },\n\n  getPlans: async (): Promise<WeeklyPlan[]> => {\n    if (useLocalStorage) return localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);\n\n    try {\n      const { data, error } = await supabase.from(\'mygourmet_menu_plans\').select(\'*\');\n      if (error) throw error;\n\n      const plansMap = new Map<string, WeeklyPlan>();\n      (data || []).forEach((row: any) => {\n        const id = `${row.year}-${row.week}`;\n        if (!plansMap.has(id)) {\n          plansMap.set(id, { id, year: row.year, week: row.week, dishIds: [] });\n        }\n        if (row.dishid) {\n          plansMap.get(id)!.dishIds.push(row.dishid);\n        }\n      });\n      return Array.from(plansMap.values());\n    } catch (e) {\n      console.error(\"Failed to get plans\", e);\n      useLocalStorage = true;\n      return localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);\n    }\n  },\n\n  addDishToPlan: async (year: number, week: number, dishId: string): Promise<void> => {\n    if (useLocalStorage) {\n      const plans = localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);\n      const id = `${year}-${week}`;\n      let plan = plans.find(p => p.id === id || (p.year === year && p.week === week));\n      if (!plan) {\n        plan = { id, year, week, dishIds: [] };\n        plans.push(plan);\n      }\n      if (!plan.dishIds.includes(dishId)) {\n        plan.dishIds.push(dishId);\n      }\n      localStore.set(LS_KEYS.PLANS, plans);\n      await dataService.updateDishCookingStats(dishId, true);\n      return;\n    }\n\n    try {\n      const { error } = await supabase.from(\'mygourmet_menu_plans\').insert([{ year, week, dishid: dishId }]);\n      if (error) throw error;\n      await dataService.updateDishCookingStats(dishId, true);\n    } catch (e) {\n      console.error(\"Failed to add to plan\", e);\n    }\n  },\n\n  removeDishFromPlan: async (year: number, week: number, dishId: string): Promise<void> => {\n    if (useLocalStorage) {\n      const plans = localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);\n      const plan = plans.find(p => p.year === year && p.week === week);\n      if (plan) {\n        const idx = plan.dishIds.indexOf(dishId);\n        if (idx > -1) {\n          plan.dishIds.splice(idx, 1);\n        }\n        localStore.set(LS_KEYS.PLANS, plans);\n      }\n      await dataService.updateDishCookingStats(dishId, false);\n      return;\n    }\n\n    try {\n      const { error } = await supabase\n        .from(\'mygourmet_menu_plans\')\n        .delete()\n        .match({ year, week, dishid: dishId });\n\n      if (error) throw error;\n      await dataService.updateDishCookingStats(dishId, false);\n    } catch (e) {\n      console.error(\"Failed to remove from plan\", e);\n    }\n  },\n\n  getCategories: async (): Promise<string[]> => {\n    if (useLocalStorage) {\n      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);\n      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;\n    }\n\n    try {\n      const { data, error } = await supabase\n        .from(\'mygourmet_categories\')\n        .select(\'name\')\n        .order(\'sortorder\', { ascending: true });\n\n      if (error) throw error;\n      if (!data || data.length === 0) return DISH_CATEGORIES;\n      return data.map((c: any) => c.name);\n    } catch (e) {\n      console.error(\"Failed to get categories\", e);\n      useLocalStorage = true;\n      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);\n      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;\n    }\n  },\n\n  saveCategories: async (categories: string[]): Promise<void> => {\n    if (useLocalStorage) {\n      localStore.set(LS_KEYS.CATEGORIES, categories);\n      return;\n    }\n\n    try {\n      const rows = categories.map((name, index) => ({\n        name,\n        sortorder: index\n      }));\n\n      const { error } = await supabase.from(\'mygourmet_categories\').upsert(rows, { onConflict: \'name\' });\n      if (error) throw error;\n    } catch (e) {\n      console.error(\"Failed to save categories\", e);\n      useLocalStorage = true;\n      localStore.set(LS_KEYS.CATEGORIES, categories);\n    }\n  },\n\n  getShoppingList: async (year: number, week: number): Promise<Ingredient[]> => {\n    try {\n      let plans = await dataService.getPlans();\n      let dishes = await dataService.getDishes();\n\n      const safePlans = Array.isArray(plans) ? plans : [];\n      const safeDishes = Array.isArray(dishes) ? dishes : [];\n\n      const id = `${year}-${week}`;\n      const plan = safePlans.find((p) => p.id === id || (p.year === year && p.week === week));\n\n      if (!plan) return [];\n\n      const allIngredients: Ingredient[] = [];\n\n      plan.dishIds.forEach(dishId => {\n        const dish = safeDishes.find(d => d.id === dishId);\n        if (dish && dish.ingredients) {\n          allIngredients.push(...dish.ingredients);\n        }\n      });\n\n      return allIngredients;\n    } catch (e) {\n      console.error(\"Shopping list generation failed\", e);\n      return [];\n    }\n  },\n\n  fetchRecipeData: async (url: string): Promise<any> => {\n    if (!url) {\n      return { success: false, error: \"URL is required.\" };\n    }\n\n    // Remove protocol from the target URL to prevent nginx slash-merging issues.\n    const targetUrl = url.replace(/^(https?:\/\/)/, \'\');\n    const proxyUrl = `https://cors.bivort.de/${targetUrl}`;\n\n    try {\n      const response = await fetch(proxyUrl, {\n         headers: {\n           \'X-Requested-With\': \'XMLHttpRequest\',\n           \'Origin\': \'https://mygourmet.bivort.de\'\n         }\n      });\n\n      if (response.status === 403) {\n        return { success: false, error: \"Zugriff verweigert (403). Die Ziel-Webseite (z.B. Chefkoch.de) blockiert möglicherweise die Anfrage des Proxy-Servers. Versuche es später erneut oder trage die Daten manuell ein.\" };\n      }\n      if (!response.ok) {\n        throw new Error(`Proxy-Anfrage fehlgeschlagen mit Status: ${response.status}`);\n      }\n\n      const html = await response.text();\n      const parser = new DOMParser();\n      const doc = parser.parseFromString(html, \'text/html\');\n      \n      // --- Scrape Data (Chefkoch specific) ---\n\n      const name = doc.querySelector(\'h1.page-title, .page-title\')?.textContent?.trim() || \'\';\n      if (!name) console.warn(\"Rezept-Name konnte nicht im HTML gefunden werden.\");\n\n      const ingredients: Ingredient[] = [];\n      const ingredientRows = doc.querySelectorAll(\'.ingredients tr, table[class*=\"ingredients\"] tr\');\n      ingredientRows.forEach(row => {\n          const amountCell = row.querySelector(\'td:first-child\');\n          const nameCell = row.querySelector(\'td:nth-child(2)\');\n          \n          if (amountCell && nameCell) {\n              const amountText = amountCell.textContent?.trim().replace(/\\s*\\n\\s*/g, \' \').trim() || \'\';\n              const nameText = nameCell.textContent?.trim() || \'\';\n\n              if (nameText) {\n                  const match = amountText.match(/^([\\d.,\\/\\s-–]+(?:[\\d.,\\/\\s-–]+)*)?\\s*(.*)$/);\n                  let amount = match?.[1]?.trim() || \'\';\n                  let unit = match?.[2]?.trim() || \'\';\n\n                  if (!amount && unit) {\n                      // This case is for things like \"Etwas\" or \"n. B.\"\n                  } else if (amount && !unit) {\n                      const parts = amount.split(/\\s+/);\n                      if (parts.length > 1 && isNaN(parseFloat(parts[parts.length-1]))) {\n                          unit = parts.pop() + (unit ? ` ${unit}` : \'\');\n                          amount = parts.join(\' \');\n                      }\n                  }\n\n                  ingredients.push({\n                      id: generateId(),\n                      amount: amount,\n                      unit: unit,\n                      name: nameText\n                  });\n              }\n          }\n      });\n      if (ingredients.length === 0) console.warn(\"Zutaten konnten nicht im HTML gefunden werden.\");\n\n      const instructionsDiv = doc.querySelector(\'#rezept-zubereitung, [class*=\"instructions\"]\');\n      const notes = instructionsDiv?.innerText?.trim() || \'\';\n      if (!notes) console.warn(\"Zubereitungsschritte konnten nicht im HTML gefunden werden.\");\n\n      return {\n        success: true,\n        name: name,\n        ingredients: ingredients,\n        notes: notes\n      };\n\n    } catch (e) {\n      console.error(`Fehler beim Laden über den Proxy ${proxyUrl}`, e);\n      return { success: false, error: `Dein Proxy-Server unter ${proxyUrl} ist nicht erreichbar oder funktioniert nicht wie erwartet. Details: ${(e as Error).message}` };\n    }\n  }\n};\n
+import { Dish, WeeklyPlan, Ingredient } from '../types';
+import { DISH_CATEGORIES, MOCK_DISHES } from '../constants';
+import { supabase } from '../lib/supabase';
+
+console.log("Initializing dataService (Supabase)...");
+
+const LS_KEYS = {
+  DISHES: 'mygourmet_dishes',
+  PLANS: 'mygourmet_plans',
+  CATEGORIES: 'mygourmet_categories'
+};
+
+// In-Memory Fallback store in case LocalStorage is disabled/throws
+const memoryStore: Record<string, any> = {};
+
+// Safe LocalStorage Wrapper
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("LocalStorage access denied, using memory store");
+      return memoryStore[key] || null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      memoryStore[key] = value;
+    }
+  }
+};
+
+// Polyfill for randomUUID
+export const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch (e) { }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// State to track if we are forcing local storage due to API failure
+let useLocalStorage = false;
+
+// Helper to initialize LocalStorage with Mock data if empty
+const initLocalStorage = () => {
+  try {
+    if (!safeStorage.getItem(LS_KEYS.DISHES)) {
+      safeStorage.setItem(LS_KEYS.DISHES, JSON.stringify(MOCK_DISHES));
+    }
+    if (!safeStorage.getItem(LS_KEYS.PLANS)) {
+      safeStorage.setItem(LS_KEYS.PLANS, JSON.stringify([]));
+    }
+    if (!safeStorage.getItem(LS_KEYS.CATEGORIES)) {
+      safeStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(DISH_CATEGORIES));
+    }
+  } catch (e) {
+    console.error("Failed to init storage", e);
+  }
+};
+
+// Initialize once
+initLocalStorage();
+
+// Helper for Local Storage Operations
+const localStore = {
+  get: <T>(key: string): T => {
+    try {
+      const item = safeStorage.getItem(key);
+      return item ? JSON.parse(item) : [];
+    } catch (e) {
+      console.error("Error parsing local data", e);
+      return [] as unknown as T;
+    }
+  },
+  set: (key: string, data: any) => {
+    try {
+      safeStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      console.error("Error saving local data", e);
+    }
+  }
+};
+
+// DB to App mapping
+const mapDishFromDb = (d: any): Dish => ({
+  id: d.id,
+  name: d.name,
+  image: d.image,
+  rating: d.rating,
+  recipeLink: d.recipelink,
+  notes: d.notes,
+  timesCooked: d.timescooked,
+  lastCooked: d.lastcooked,
+  ingredients: d.ingredients || [],
+  tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []
+});
+
+export const dataService = {
+  checkBackendConnection: async (): Promise<boolean> => {
+    try {
+      useLocalStorage = false;
+      const { error } = await supabase.from('mygourmet_categories').select('count', { count: 'exact', head: true });
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      console.warn("Supabase connection check failed, switching to local storage", e);
+      useLocalStorage = true;
+      return false;
+    }
+  },
+
+  getDishes: async (): Promise<Dish[]> => {
+    if (useLocalStorage) return localStore.get<Dish[]>(LS_KEYS.DISHES);
+
+    try {
+      const { data, error } = await supabase
+        .from('mygourmet_dishes')
+        .select(`
+          *,
+          ingredients:mygourmet_ingredients (*),
+          dish_tags:mygourmet_dish_tags (tagname)
+        `);
+
+      if (error) throw error;
+      return (data || []).map(mapDishFromDb);
+    } catch (e) {
+      console.error("Failed to fetch dishes from Supabase", e);
+      useLocalStorage = true;
+      return localStore.get<Dish[]>(LS_KEYS.DISHES);
+    }
+  },
+
+  addDish: async (dish: Omit<Dish, 'id'>): Promise<Dish> => {
+    const newDish = { ...dish, id: generateId() };
+
+    if (useLocalStorage) {
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      dishes.unshift(newDish as Dish);
+      localStore.set(LS_KEYS.DISHES, dishes);
+      return newDish as Dish;
+    }
+
+    try {
+      const { error: dishError } = await supabase
+        .from('mygourmet_dishes')
+        .insert([{
+          id: newDish.id,
+          name: newDish.name,
+          image: newDish.image,
+          rating: newDish.rating,
+          recipelink: newDish.recipeLink,
+          notes: newDish.notes,
+          timescooked: newDish.timesCooked,
+          lastcooked: newDish.lastCooked
+        }]);
+
+      if (dishError) throw dishError;
+
+      if (newDish.ingredients.length > 0) {
+        const ingredientsToInsert = newDish.ingredients.map(ing => ({
+          dishid: newDish.id,
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit
+        }));
+        const { error: ingError } = await supabase.from('mygourmet_ingredients').insert(ingredientsToInsert);
+        if (ingError) throw ingError;
+      }
+
+      if (newDish.tags && newDish.tags.length > 0) {
+        const tagsToInsert = newDish.tags.map(tag => ({
+          dishid: newDish.id,
+          tagname: tag
+        }));
+        const { error: tagError } = await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
+        if (tagError) throw tagError;
+      }
+
+      return newDish as Dish;
+    } catch (e) {
+      console.error("Failed to add dish to Supabase", e);
+      useLocalStorage = true;
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      dishes.unshift(newDish as Dish);
+      localStore.set(LS_KEYS.DISHES, dishes);
+      return newDish as Dish;
+    }
+  },
+
+  updateDish: async (dish: Dish): Promise<Dish> => {
+    if (useLocalStorage) {
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      const index = dishes.findIndex(d => d.id === dish.id);
+      if (index !== -1) {
+        dishes[index] = dish;
+        localStore.set(LS_KEYS.DISHES, dishes);
+      }
+      return dish;
+    }
+
+    try {
+      const { error: dishError } = await supabase
+        .from('mygourmet_dishes')
+        .update({
+          name: dish.name,
+          image: dish.image,
+          rating: dish.rating,
+          recipelink: dish.recipeLink,
+          notes: dish.notes,
+          timescooked: dish.timesCooked,
+          lastcooked: dish.lastCooked
+        })
+        .eq('id', dish.id);
+
+      if (dishError) throw dishError;
+
+      await supabase.from('mygourmet_ingredients').delete().eq('dishid', dish.id);
+      if (dish.ingredients.length > 0) {
+        const ingredientsToInsert = dish.ingredients.map(ing => ({
+          dishid: dish.id,
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit
+        }));
+        await supabase.from('mygourmet_ingredients').insert(ingredientsToInsert);
+      }
+
+      await supabase.from('mygourmet_dish_tags').delete().eq('dishid', dish.id);
+      if (dish.tags && dish.tags.length > 0) {
+        const tagsToInsert = dish.tags.map(tag => ({
+          dishid: dish.id,
+          tagname: tag
+        }));
+        await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
+      }
+
+      return dish;
+    } catch (e) {
+      console.error("Failed to update dish in Supabase", e);
+      useLocalStorage = true;
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      const index = dishes.findIndex(d => d.id === dish.id);
+      if (index !== -1) {
+        dishes[index] = dish;
+        localStore.set(LS_KEYS.DISHES, dishes);
+      }
+      return dish;
+    }
+  },
+  
+  updateDishCookingStats: async (dishId: string, increment: boolean): Promise<void> => {
+    try {
+      const dishes = await dataService.getDishes();
+      const dish = dishes.find(d => d.id === dishId);
+      if (!dish) return;
+
+      const updatedDish: Dish = {
+        ...dish,
+        timesCooked: Math.max(0, (dish.timesCooked || 0) + (increment ? 1 : -1)),
+        lastCooked: increment ? new Date().toISOString() : dish.lastCooked
+      };
+
+      await dataService.updateDish(updatedDish);
+    } catch (error) {
+      console.error('Failed to update dish cooking stats:', error);
+    }
+  },
+
+  deleteDish: async (id: string): Promise<void> => {
+    if (useLocalStorage) {
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      const filtered = dishes.filter(d => d.id !== id);
+      localStore.set(LS_KEYS.DISHES, filtered);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('mygourmet_dishes').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to delete dish", e);
+      useLocalStorage = true;
+      const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
+      const filtered = dishes.filter(d => d.id !== id);
+      localStore.set(LS_KEYS.DISHES, filtered);
+    }
+  },
+
+  getPlans: async (): Promise<WeeklyPlan[]> => {
+    if (useLocalStorage) return localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);
+
+    try {
+      const { data, error } = await supabase.from('mygourmet_menu_plans').select('*');
+      if (error) throw error;
+
+      const plansMap = new Map<string, WeeklyPlan>();
+      (data || []).forEach((row: any) => {
+        const id = `${row.year}-${row.week}`;
+        if (!plansMap.has(id)) {
+          plansMap.set(id, { id, year: row.year, week: row.week, dishIds: [] });
+        }
+        if (row.dishid) {
+          plansMap.get(id)!.dishIds.push(row.dishid);
+        }
+      });
+      return Array.from(plansMap.values());
+    } catch (e) {
+      console.error("Failed to get plans", e);
+      useLocalStorage = true;
+      return localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);
+    }
+  },
+
+  addDishToPlan: async (year: number, week: number, dishId: string): Promise<void> => {
+    if (useLocalStorage) {
+      const plans = localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);
+      const id = `${year}-${week}`;
+      let plan = plans.find(p => p.id === id || (p.year === year && p.week === week));
+      if (!plan) {
+        plan = { id, year, week, dishIds: [] };
+        plans.push(plan);
+      }
+      if (!plan.dishIds.includes(dishId)) {
+        plan.dishIds.push(dishId);
+      }
+      localStore.set(LS_KEYS.PLANS, plans);
+      await dataService.updateDishCookingStats(dishId, true);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('mygourmet_menu_plans').insert([{ year, week, dishid: dishId }]);
+      if (error) throw error;
+      await dataService.updateDishCookingStats(dishId, true);
+    } catch (e) {
+      console.error("Failed to add to plan", e);
+    }
+  },
+
+  removeDishFromPlan: async (year: number, week: number, dishId: string): Promise<void> => {
+    if (useLocalStorage) {
+      const plans = localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);
+      const plan = plans.find(p => p.year === year && p.week === week);
+      if (plan) {
+        const idx = plan.dishIds.indexOf(dishId);
+        if (idx > -1) {
+          plan.dishIds.splice(idx, 1);
+        }
+        localStore.set(LS_KEYS.PLANS, plans);
+      }
+      await dataService.updateDishCookingStats(dishId, false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('mygourmet_menu_plans')
+        .delete()
+        .match({ year, week, dishid: dishId });
+
+      if (error) throw error;
+      await dataService.updateDishCookingStats(dishId, false);
+    } catch (e) {
+      console.error("Failed to remove from plan", e);
+    }
+  },
+
+  getCategories: async (): Promise<string[]> => {
+    if (useLocalStorage) {
+      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);
+      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('mygourmet_categories')
+        .select('name')
+        .order('sortorder', { ascending: true });
+
+      if (error) throw error;
+      if (!data || data.length === 0) return DISH_CATEGORIES;
+      return data.map((c: any) => c.name);
+    } catch (e) {
+      console.error("Failed to get categories", e);
+      useLocalStorage = true;
+      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);
+      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;
+    }
+  },
+
+  saveCategories: async (categories: string[]): Promise<void> => {
+    if (useLocalStorage) {
+      localStore.set(LS_KEYS.CATEGORIES, categories);
+      return;
+    }
+
+    try {
+      const rows = categories.map((name, index) => ({
+        name,
+        sortorder: index
+      }));
+
+      const { error } = await supabase.from('mygourmet_categories').upsert(rows, { onConflict: 'name' });
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to save categories", e);
+      useLocalStorage = true;
+      localStore.set(LS_KEYS.CATEGORIES, categories);
+    }
+  },
+
+  getShoppingList: async (year: number, week: number): Promise<Ingredient[]> => {
+    try {
+      let plans = await dataService.getPlans();
+      let dishes = await dataService.getDishes();
+
+      const safePlans = Array.isArray(plans) ? plans : [];
+      const safeDishes = Array.isArray(dishes) ? dishes : [];
+
+      const id = `${year}-${week}`;
+      const plan = safePlans.find((p) => p.id === id || (p.year === year && p.week === week));
+
+      if (!plan) return [];
+
+      const allIngredients: Ingredient[] = [];
+
+      plan.dishIds.forEach(dishId => {
+        const dish = safeDishes.find(d => d.id === dishId);
+        if (dish && dish.ingredients) {
+          allIngredients.push(...dish.ingredients);
+        }
+      });
+
+      return allIngredients;
+    } catch (e) {
+      console.error("Shopping list generation failed", e);
+      return [];
+    }
+  },
+
+  fetchRecipeData: async (url: string): Promise<any> => {
+    if (!url) {
+      return { success: false, error: "URL is required." };
+    }
+
+    // Remove protocol from the target URL to prevent nginx slash-merging issues.
+    const targetUrl = url.replace(/^(https?:\/\/)/, '');
+    const proxyUrl = `https://cors.bivort.de/${targetUrl}`;
+
+    try {
+      const response = await fetch(proxyUrl, {
+         headers: {
+           'X-Requested-With': 'XMLHttpRequest',
+           'Origin': 'https://mygourmet.bivort.de'
+         }
+      });
+
+      if (response.status === 403) {
+        return { success: false, error: "Zugriff verweigert (403). Die Ziel-Webseite (z.B. Chefkoch.de) blockiert möglicherweise die Anfrage des Proxy-Servers. Versuche es später erneut oder trage die Daten manuell ein." };
+      }
+      if (!response.ok) {
+        throw new Error(`Proxy-Anfrage fehlgeschlagen mit Status: ${response.status}`);
+      }
+
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // --- Scrape Data (Chefkoch specific) ---
+
+      const name = doc.querySelector('h1.page-title, .page-title')?.textContent?.trim() || '';
+      if (!name) console.warn("Rezept-Name konnte nicht im HTML gefunden werden.");
+
+      const ingredients: Ingredient[] = [];
+      const ingredientRows = doc.querySelectorAll('.ingredients tr, table[class*="ingredients"] tr');
+      ingredientRows.forEach(row => {
+          const amountCell = row.querySelector('td:first-child');
+          const nameCell = row.querySelector('td:nth-child(2)');
+          
+          if (amountCell && nameCell) {
+              const amountText = amountCell.textContent?.trim().replace(/\s*\n\s*/g, ' ').trim() || '';
+              const nameText = nameCell.textContent?.trim() || '';
+
+              if (nameText) {
+                  const match = amountText.match(/^([\d.,\/\s-–]+(?:[\d.,\/\s-–]+)*)?\s*(.*)$/);
+                  let amount = match?.[1]?.trim() || '';
+                  let unit = match?.[2]?.trim() || '';
+
+                  if (!amount && unit) {
+                      // This case is for things like "Etwas" or "n. B."
+                  } else if (amount && !unit) {
+                      const parts = amount.split(/\s+/);
+                      if (parts.length > 1 && isNaN(parseFloat(parts[parts.length-1]))) {
+                          unit = parts.pop() + (unit ? ` ${unit}` : '');
+                          amount = parts.join(' ');
+                      }
+                  }
+
+                  ingredients.push({
+                      id: generateId(),
+                      amount: amount,
+                      unit: unit,
+                      name: nameText
+                  });
+              }
+          }
+      });
+      if (ingredients.length === 0) console.warn("Zutaten konnten nicht im HTML gefunden werden.");
+
+      const instructionsDiv = doc.querySelector('#rezept-zubereitung, [class*="instructions"]');
+      const notes = instructionsDiv?.innerText?.trim() || '';
+      if (!notes) console.warn("Zubereitungsschritte konnten nicht im HTML gefunden werden.");
+
+      return {
+        success: true,
+        name: name,
+        ingredients: ingredients,
+        notes: notes
+      };
+
+    } catch (e) {
+      console.error(`Fehler beim Laden über den Proxy ${proxyUrl}`, e);
+      return { success: false, error: `Dein Proxy-Server unter ${proxyUrl} ist nicht erreichbar oder funktioniert nicht wie erwartet. Details: ${(e as Error).message}` };
+    }
+  }
+};
