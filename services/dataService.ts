@@ -450,7 +450,6 @@ export const dataService = {
       return { success: false, error: "URL is required." };
     }
 
-    // Remove protocol from the target URL to prevent nginx slash-merging issues.
     const targetUrl = url.replace(/^(https?:\/\/)/, '');
     const proxyUrl = `https://cors.bivort.de/${targetUrl}`;
 
@@ -471,55 +470,112 @@ export const dataService = {
       }
 
       const html = await response.text();
-      // DEBUG: Log the received HTML to the console
-      console.log("Vom Proxy empfangener HTML-Inhalt:", html);
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
-      
-      // --- Scrape Data (Chefkoch specific) ---
 
-      const name = doc.querySelector('h1.page-title, .page-title')?.textContent?.trim() || '';
-      if (!name) console.warn("Rezept-Name konnte nicht im HTML gefunden werden.");
+      let name = '';
+      let ingredients: Ingredient[] = [];
+      let notes = '';
 
-      const ingredients: Ingredient[] = [];
-      const ingredientRows = doc.querySelectorAll('.ingredients tr, table[class*="ingredients"] tr');
-      ingredientRows.forEach(row => {
-          const amountCell = row.querySelector('td:first-child');
-          const nameCell = row.querySelector('td:nth-child(2)');
-          
-          if (amountCell && nameCell) {
-              const amountText = amountCell.textContent?.trim().replace(/\s*\n\s*/g, ' ').trim() || '';
-              const nameText = nameCell.textContent?.trim() || '';
+      const jsonLdScript = doc.querySelector('script[type="application/ld+json"]');
+      if (jsonLdScript) {
+        console.log("Found JSON-LD script, parsing data...");
+        const jsonLd = JSON.parse(jsonLdScript.textContent || '{}');
 
-              if (nameText) {
-                  const match = amountText.match(/^([\d.,\/\s-–]+(?:[\d.,\/\s-–]+)*)?\s*(.*)$/);
-                  let amount = match?.[1]?.trim() || '';
-                  let unit = match?.[2]?.trim() || '';
+        name = jsonLd.name || '';
 
-                  if (!amount && unit) {
-                      // This case is for things like "Etwas" or "n. B."
-                  } else if (amount && !unit) {
-                      const parts = amount.split(/\s+/);
-                      if (parts.length > 1 && isNaN(parseFloat(parts[parts.length-1]))) {
-                          unit = parts.pop() + (unit ? ` ${unit}` : '');
-                          amount = parts.join(' ');
-                      }
-                  }
+        if (jsonLd.recipeIngredient) {
+          ingredients = jsonLd.recipeIngredient.map((ingString: string) => {
+            const cleanedString = ingString.replace(/&frac12;/g, '1/2').replace(/&frac14;/g, '1/4').replace(/&frac34;/g, '3/4');
+            const parts = cleanedString.split(' ');
+            let amount = '';
+            let unit = '';
+            let name = '';
 
-                  ingredients.push({
-                      id: generateId(),
-                      amount: amount,
-                      unit: unit,
-                      name: nameText
-                  });
-              }
+            if (parts.length >= 3 && (!isNaN(parseFloat(parts[0])) || parts[0].includes('/'))) {
+                amount = parts[0];
+                unit = parts[1];
+                name = parts.slice(2).join(' ');
+            } else if (parts.length === 2 && (!isNaN(parseFloat(parts[0])) || parts[0].includes('/'))) {
+                amount = parts[0];
+                name = parts[1];
+            } else {
+                name = cleanedString;
+            }
+            
+            return {
+              id: generateId(),
+              amount,
+              unit,
+              name
+            };
+          });
+        }
+        
+        if (jsonLd.recipeInstructions) {
+          if (Array.isArray(jsonLd.recipeInstructions)) {
+            notes = jsonLd.recipeInstructions.map((step: any) => step.text || step).join('\n');
+          } else {
+            notes = jsonLd.recipeInstructions;
           }
-      });
-      if (ingredients.length === 0) console.warn("Zutaten konnten nicht im HTML gefunden werden.");
+        }
+      }
 
-      const instructionsDiv = doc.querySelector('#rezept-zubereitung, [class*="instructions"]');
-      const notes = instructionsDiv?.innerText?.trim() || '';
-      if (!notes) console.warn("Zubereitungsschritte konnten nicht im HTML gefunden werden.");
+      if (!name) {
+        console.log("No recipe name in JSON-LD, trying other selectors...");
+        name = doc.querySelector('h1.page-title, .page-title, [property="og:title"]')?.getAttribute('content') || doc.querySelector('h1')?.textContent?.trim() || '';
+        if (name) {
+          name = name.split(' - ')[0]; // Clean up title from Cookidoo
+        }
+      }
+      
+      if (ingredients.length === 0) {
+        console.log("No ingredients in JSON-LD, trying to scrape table...");
+        const ingredientRows = doc.querySelectorAll('.ingredients tr, table[class*="ingredients"] tr');
+        ingredientRows.forEach(row => {
+            const amountCell = row.querySelector('td:first-child');
+            const nameCell = row.querySelector('td:nth-child(2)');
+            
+            if (amountCell && nameCell) {
+                const amountText = amountCell.textContent?.trim().replace(/\s*\n\s*/g, ' ').trim() || '';
+                const nameText = nameCell.textContent?.trim() || '';
+
+                if (nameText) {
+                    const match = amountText.match(/^([\d.,\/\s-–]+(?:[\d.,\/\s-–]+)*)?\s*(.*)$/);
+                    let amount = match?.[1]?.trim() || '';
+                    let unit = match?.[2]?.trim() || '';
+
+                    if (!amount && unit) {
+                        // This case is for things like "Etwas" or "n. B."
+                    } else if (amount && !unit) {
+                        const parts = amount.split(/\s+/);
+                        if (parts.length > 1 && isNaN(parseFloat(parts[parts.length-1]))) {
+                            unit = parts.pop() + (unit ? ` ${unit}` : '');
+                            amount = parts.join(' ');
+                        }
+                    }
+
+                    ingredients.push({
+                        id: generateId(),
+                        amount: amount,
+                        unit: unit,
+                        name: nameText
+                    });
+                }
+            }
+        });
+      }
+
+      if (!notes) {
+        console.log("No instructions in JSON-LD, trying other selectors...");
+        const instructionsDiv = doc.querySelector('#rezept-zubereitung, [class*="instructions"], [class*="preparation"]');
+        notes = instructionsDiv?.innerText?.trim() || '';
+      }
+      
+      if (!name && ingredients.length === 0) {
+         console.error("Could not parse recipe data from website.");
+         return { success: false, error: "Rezept-Daten konnten nicht automatisch von der Webseite gelesen werden. Bitte manuell eingeben." };
+      }
 
       return {
         success: true,
