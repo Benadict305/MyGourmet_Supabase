@@ -10,10 +10,8 @@ const LS_KEYS = {
   CATEGORIES: 'mygourmet_categories'
 };
 
-// In-Memory Fallback store in case LocalStorage is disabled/throws
 const memoryStore: Record<string, any> = {};
 
-// Safe LocalStorage Wrapper
 const safeStorage = {
   getItem: (key: string): string | null => {
     try {
@@ -32,7 +30,6 @@ const safeStorage = {
   }
 };
 
-// Polyfill for randomUUID
 export const generateId = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     try {
@@ -45,10 +42,8 @@ export const generateId = (): string => {
   });
 };
 
-// State to track if we are forcing local storage due to API failure
 let useLocalStorage = false;
 
-// Helper to initialize LocalStorage with Mock data if empty
 const initLocalStorage = () => {
   try {
     if (!safeStorage.getItem(LS_KEYS.DISHES)) {
@@ -65,10 +60,8 @@ const initLocalStorage = () => {
   }
 };
 
-// Initialize once
 initLocalStorage();
 
-// Helper for Local Storage Operations
 const localStore = {
   get: <T>(key: string): T => {
     try {
@@ -88,7 +81,6 @@ const localStore = {
   }
 };
 
-// DB to App mapping
 const mapDishFromDb = (d: any): Dish => ({
   id: d.id,
   name: d.name,
@@ -101,6 +93,34 @@ const mapDishFromDb = (d: any): Dish => ({
   ingredients: d.ingredients || [],
   tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []
 });
+
+const imageUrlToBase64 = async (url: string): Promise<string> => {
+  if (!url) return '';
+  try {
+    const targetUrl = url.replace(/^(https?:\/\/)/, '');
+    const proxyUrl = `https://cors.bivort.de/${targetUrl}`;
+    const response = await fetch(proxyUrl, {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Origin': 'https://mygourmet.bivort.de'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image with status: ${response.status}`);
+    }
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to Base64:', error);
+    return '';
+  }
+};
 
 export const dataService = {
   checkBackendConnection: async (): Promise<boolean> => {
@@ -476,6 +496,12 @@ export const dataService = {
       let name = '';
       let ingredients: Ingredient[] = [];
       let notes = '';
+      let image = '';
+      let tags: string[] = [];
+
+      if (url.includes('cookidoo.de')) {
+        tags.push('Thermomix');
+      }
 
       const jsonLdScript = doc.querySelector('script[type="application/ld+json"]');
       if (jsonLdScript) {
@@ -483,6 +509,19 @@ export const dataService = {
         const jsonLd = JSON.parse(jsonLdScript.textContent || '{}');
 
         name = jsonLd.name || '';
+        
+        let imageUrl = jsonLd.image;
+        if (Array.isArray(imageUrl)) {
+          imageUrl = imageUrl[0];
+        }
+        if (typeof imageUrl === 'object' && imageUrl !== null) {
+            imageUrl = imageUrl.url;
+        }
+
+        if (imageUrl) {
+            console.log("Found image URL in JSON-LD:", imageUrl);
+            image = await imageUrlToBase64(imageUrl);
+        }
 
         if (jsonLd.recipeIngredient) {
           ingredients = jsonLd.recipeIngredient.map((ingString: string) => {
@@ -525,7 +564,7 @@ export const dataService = {
         console.log("No recipe name in JSON-LD, trying other selectors...");
         name = doc.querySelector('h1.page-title, .page-title, [property="og:title"]')?.getAttribute('content') || doc.querySelector('h1')?.textContent?.trim() || '';
         if (name) {
-          name = name.split(' - ')[0]; // Clean up title from Cookidoo
+          name = name.split(' - ')[0];
         }
       }
       
@@ -571,6 +610,14 @@ export const dataService = {
         const instructionsDiv = doc.querySelector('#rezept-zubereitung, [class*="instructions"], [class*="preparation"]');
         notes = instructionsDiv?.innerText?.trim() || '';
       }
+
+      if (!image) {
+        const metaImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        if (metaImage) {
+            console.log("Found image URL in meta tag:", metaImage);
+            image = await imageUrlToBase64(metaImage);
+        }
+      }
       
       if (!name && ingredients.length === 0) {
          console.error("Could not parse recipe data from website.");
@@ -581,7 +628,9 @@ export const dataService = {
         success: true,
         name: name,
         ingredients: ingredients,
-        notes: notes
+        notes: notes,
+        image: image,
+        tags: tags
       };
 
     } catch (e) {
