@@ -447,17 +447,87 @@ export const dataService = {
   },
 
   fetchRecipeData: async (url: string): Promise<any> => {
+    // We will use a public CORS proxy. Note that this can be unreliable.
+    // Scraping is implemented only for chefkoch.de for now.
+    if (!url.includes('chefkoch.de')) {
+      return { success: false, error: "Das automatische Laden von Rezepten wird aktuell nur für chefkoch.de unterstützt." };
+    }
+
     try {
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      // Using allorigins.win as a CORS proxy
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      
       const response = await fetch(proxyUrl);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`Proxy-Fehler! Status: ${response.status}`);
       }
-      // For now, we just return a success indicator.
-      // The actual HTML parsing would be more complex.
-      return { success: true, url: url };
+
+      const data = await response.json();
+      const html = data.contents;
+
+      if (!html) {
+        throw new Error("Leere Antwort vom CORS-Proxy.");
+      }
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      // --- Scrape Data (Chefkoch specific) ---
+
+      // Scrape name
+      const name = doc.querySelector('h1.page-title, .page-title')?.textContent?.trim() || '';
+      if (!name) {
+         console.warn("Could not find recipe name in scraped HTML");
+      }
+      
+      // Scrape ingredients
+      const ingredients: Ingredient[] = [];
+      const ingredientRows = doc.querySelectorAll('.ingredients tr');
+      ingredientRows.forEach(row => {
+        const amountCell = row.querySelector('td:first-child');
+        const nameCell = row.querySelector('td:nth-child(2)');
+        
+        if (amountCell && nameCell) {
+          const amountText = amountCell.textContent?.trim() || '';
+          const nameText = nameCell.textContent?.trim() || '';
+
+          // Simple split of amount and unit
+          const amountMatch = amountText.match(/^[\d.,\/\s-–]+(?:[\d.,\/\s-–]+)*\s*(.*)/);
+          const amount = amountMatch?.[1]?.trim() || amountText;
+          const unit = amountMatch?.[2]?.trim() || '';
+          
+          if (nameText) {
+            ingredients.push({
+              id: generateId(),
+              amount: amount || '',
+              unit: unit,
+              name: nameText.trim()
+            });
+          }
+        }
+      });
+       if (ingredients.length === 0) {
+         console.warn("Could not find ingredients in scraped HTML");
+      }
+
+
+      // Scrape instructions (notes)
+      const instructionsDiv = doc.querySelector('#rezept-zubereitung, .recipe-instructions');
+      const notes = instructionsDiv?.innerText?.trim() || '';
+       if (!notes) {
+         console.warn("Could not find instructions in scraped HTML");
+      }
+
+      return {
+        success: true,
+        name: name,
+        ingredients: ingredients,
+        notes: notes
+        // Image is excluded for now due to complexity with cross-origin data.
+      };
+
     } catch (e) {
-      console.error(`Failed to fetch from ${url} via corsproxy.io`, e);
+      console.error(`Fehler beim Laden und Verarbeiten von ${url}`, e);
       return { success: false, error: (e as Error).message };
     }
   }

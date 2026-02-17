@@ -155,10 +155,21 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
       const recipeData = await dataService.fetchRecipeData(url);
 
       if (recipeData && recipeData.success) {
-        alert('Rezeptdaten erfolgreich abgerufen! (Weitere Integration zur Anzeige der Daten ist erforderlich)');
-        // Hier könnten Sie die Daten in einem anderen Modal oder Bereich anzeigen
+        // Update fields only if they are empty
+        if (!editedDish.name && recipeData.name) {
+          updateField('name', recipeData.name);
+        }
+        if ((!editedDish.ingredients || editedDish.ingredients.length === 0) && recipeData.ingredients) {
+          updateField('ingredients', recipeData.ingredients);
+        }
+        if (!editedDish.notes && recipeData.notes) {
+          updateField('notes', recipeData.notes);
+        }
+         // You might want to show a success message
+         alert('Rezeptdaten erfolgreich geladen!');
+
       } else {
-        throw new Error(recipeData.error || 'Unbekannter Fehler');
+        throw new Error(recipeData.error || 'Unbekannter Fehler beim Verarbeiten des Rezepts');
       }
     } catch (error) {
       console.error('Failed to fetch recipe:', error);
