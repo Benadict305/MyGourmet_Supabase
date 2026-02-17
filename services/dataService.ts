@@ -89,6 +89,20 @@ const localStore = {
   }
 };
 
+// DB to App mapping
+const mapDishFromDb = (d: any): Dish => ({
+  id: d.id,
+  name: d.name,
+  image: d.image,
+  rating: d.rating,
+  recipeLink: d.recipelink,
+  notes: d.notes,
+  timesCooked: d.timescooked,
+  lastCooked: d.lastcooked,
+  ingredients: d.ingredients || [],
+  tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []
+});
+
 export const dataService = {
   checkBackendConnection: async (): Promise<boolean> => {
     try {
@@ -112,18 +126,14 @@ export const dataService = {
         .select(`
           *,
           ingredients:mygourmet_ingredients (*),
-          dish_tags:mygourmet_dish_tags (tag_name)
+          dish_tags:mygourmet_dish_tags (tagname)
         `);
 
       if (error) throw error;
-
-      return (data || []).map((d: any) => ({
-        ...d,
-        ingredients: d.ingredients || [],
-        tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tag_name) : []
-      }));
+      return (data || []).map(mapDishFromDb);
     } catch (e) {
       console.error("Failed to fetch dishes from Supabase", e);
+      useLocalStorage = true;
       return localStore.get<Dish[]>(LS_KEYS.DISHES);
     }
   },
@@ -139,7 +149,6 @@ export const dataService = {
     }
 
     try {
-      // Insert dish
       const { error: dishError } = await supabase
         .from('mygourmet_dishes')
         .insert([{
@@ -147,19 +156,17 @@ export const dataService = {
           name: newDish.name,
           image: newDish.image,
           rating: newDish.rating,
-          recipe_link: newDish.recipeLink,
+          recipelink: newDish.recipeLink,
           notes: newDish.notes,
-          times_cooked: newDish.timesCooked,
-          last_cooked: newDish.lastCooked
+          timescooked: newDish.timesCooked,
+          lastcooked: newDish.lastCooked
         }]);
 
       if (dishError) throw dishError;
 
-      // Insert ingredients
       if (newDish.ingredients.length > 0) {
         const ingredientsToInsert = newDish.ingredients.map(ing => ({
-          id: generateId(),
-          dish_id: newDish.id,
+          dishid: newDish.id,
           name: ing.name,
           amount: ing.amount,
           unit: ing.unit
@@ -168,11 +175,10 @@ export const dataService = {
         if (ingError) throw ingError;
       }
 
-      // Insert tags
       if (newDish.tags && newDish.tags.length > 0) {
         const tagsToInsert = newDish.tags.map(tag => ({
-          dish_id: newDish.id,
-          tag_name: tag
+          dishid: newDish.id,
+          tagname: tag
         }));
         const { error: tagError } = await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
         if (tagError) throw tagError;
@@ -181,7 +187,7 @@ export const dataService = {
       return newDish as Dish;
     } catch (e) {
       console.error("Failed to add dish to Supabase", e);
-      // Fallback to local storage
+      useLocalStorage = true;
       const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
       dishes.unshift(newDish as Dish);
       localStore.set(LS_KEYS.DISHES, dishes);
@@ -201,28 +207,25 @@ export const dataService = {
     }
 
     try {
-      // Update dish
       const { error: dishError } = await supabase
         .from('mygourmet_dishes')
         .update({
           name: dish.name,
           image: dish.image,
           rating: dish.rating,
-          recipe_link: dish.recipeLink,
+          recipelink: dish.recipeLink,
           notes: dish.notes,
-          times_cooked: dish.timesCooked,
-          last_cooked: dish.lastCooked
+          timescooked: dish.timesCooked,
+          lastcooked: dish.lastCooked
         })
         .eq('id', dish.id);
 
       if (dishError) throw dishError;
 
-      // Update ingredients (delete and re-insert is simplest, though not most efficient)
-      await supabase.from('mygourmet_ingredients').delete().eq('dish_id', dish.id);
+      await supabase.from('mygourmet_ingredients').delete().eq('dishid', dish.id);
       if (dish.ingredients.length > 0) {
         const ingredientsToInsert = dish.ingredients.map(ing => ({
-          id: generateId(), // Creating new IDs as we replaced them
-          dish_id: dish.id,
+          dishid: dish.id,
           name: ing.name,
           amount: ing.amount,
           unit: ing.unit
@@ -230,12 +233,11 @@ export const dataService = {
         await supabase.from('mygourmet_ingredients').insert(ingredientsToInsert);
       }
 
-      // Update tags
-      await supabase.from('mygourmet_dish_tags').delete().eq('dish_id', dish.id);
+      await supabase.from('mygourmet_dish_tags').delete().eq('dishid', dish.id);
       if (dish.tags && dish.tags.length > 0) {
         const tagsToInsert = dish.tags.map(tag => ({
-          dish_id: dish.id,
-          tag_name: tag
+          dishid: dish.id,
+          tagname: tag
         }));
         await supabase.from('mygourmet_dish_tags').insert(tagsToInsert);
       }
@@ -243,7 +245,7 @@ export const dataService = {
       return dish;
     } catch (e) {
       console.error("Failed to update dish in Supabase", e);
-      // Fallback
+      useLocalStorage = true;
       const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
       const index = dishes.findIndex(d => d.id === dish.id);
       if (index !== -1) {
@@ -253,20 +255,17 @@ export const dataService = {
       return dish;
     }
   },
-
+  
   updateDishCookingStats: async (dishId: string, increment: boolean): Promise<void> => {
-    // This calls getDishes -> updateDish internally in previous logic. 
-    // We can optimize with SQL or keep logic.
-    // Keeping logic is safer for now.
     try {
       const dishes = await dataService.getDishes();
       const dish = dishes.find(d => d.id === dishId);
       if (!dish) return;
 
-      const updatedDish = {
+      const updatedDish: Dish = {
         ...dish,
-        times_cooked: Math.max(0, dish.timesCooked + (increment ? 1 : -1)),
-        last_cooked: increment ? new Date().toISOString() : dish.lastCooked
+        timesCooked: Math.max(0, (dish.timesCooked || 0) + (increment ? 1 : -1)),
+        lastCooked: increment ? new Date().toISOString() : dish.lastCooked
       };
 
       await dataService.updateDish(updatedDish);
@@ -288,6 +287,7 @@ export const dataService = {
       if (error) throw error;
     } catch (e) {
       console.error("Failed to delete dish", e);
+      useLocalStorage = true;
       const dishes = localStore.get<Dish[]>(LS_KEYS.DISHES);
       const filtered = dishes.filter(d => d.id !== id);
       localStore.set(LS_KEYS.DISHES, filtered);
@@ -301,27 +301,20 @@ export const dataService = {
       const { data, error } = await supabase.from('mygourmet_menu_plans').select('*');
       if (error) throw error;
 
-      // Transform flat DB rows into WeeklyPlan objects
       const plansMap = new Map<string, WeeklyPlan>();
-
-      data.forEach((row: any) => {
+      (data || []).forEach((row: any) => {
         const id = `${row.year}-${row.week}`;
         if (!plansMap.has(id)) {
-          plansMap.set(id, {
-            id,
-            year: row.year,
-            week: row.week,
-            dishIds: []
-          });
+          plansMap.set(id, { id, year: row.year, week: row.week, dishIds: [] });
         }
-        if (row.dishId) {
-          plansMap.get(id)!.dishIds.push(row.dishId);
+        if (row.dishid) {
+          plansMap.get(id)!.dishIds.push(row.dishid);
         }
       });
-
       return Array.from(plansMap.values());
     } catch (e) {
       console.error("Failed to get plans", e);
+      useLocalStorage = true;
       return localStore.get<WeeklyPlan[]>(LS_KEYS.PLANS);
     }
   },
@@ -337,19 +330,18 @@ export const dataService = {
       }
       if (!plan.dishIds.includes(dishId)) {
         plan.dishIds.push(dishId);
-        await dataService.updateDishCookingStats(dishId, true);
       }
       localStore.set(LS_KEYS.PLANS, plans);
+      await dataService.updateDishCookingStats(dishId, true);
       return;
     }
 
     try {
-      const { error } = await supabase.from('mygourmet_menu_plans').insert([{ year, week, dishId }]);
+      const { error } = await supabase.from('mygourmet_menu_plans').insert([{ year, week, dishid: dishId }]);
       if (error) throw error;
       await dataService.updateDishCookingStats(dishId, true);
     } catch (e) {
       console.error("Failed to add to plan", e);
-      // Fallback logic could be complex here, just log for now or switch to LS?
     }
   },
 
@@ -361,10 +353,10 @@ export const dataService = {
         const idx = plan.dishIds.indexOf(dishId);
         if (idx > -1) {
           plan.dishIds.splice(idx, 1);
-          await dataService.updateDishCookingStats(dishId, false);
         }
         localStore.set(LS_KEYS.PLANS, plans);
       }
+      await dataService.updateDishCookingStats(dishId, false);
       return;
     }
 
@@ -372,7 +364,7 @@ export const dataService = {
       const { error } = await supabase
         .from('mygourmet_menu_plans')
         .delete()
-        .match({ year, week, dishId });
+        .match({ year, week, dishid: dishId });
 
       if (error) throw error;
       await dataService.updateDishCookingStats(dishId, false);
@@ -391,13 +383,14 @@ export const dataService = {
       const { data, error } = await supabase
         .from('mygourmet_categories')
         .select('name')
-        .order('sortOrder', { ascending: true });
+        .order('sortorder', { ascending: true });
 
       if (error) throw error;
-
       if (!data || data.length === 0) return DISH_CATEGORIES;
       return data.map((c: any) => c.name);
     } catch (e) {
+      console.error("Failed to get categories", e);
+      useLocalStorage = true;
       const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);
       return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;
     }
@@ -410,27 +403,21 @@ export const dataService = {
     }
 
     try {
-      // Replace all categories
-      // Note: This is destructive. Best to upsert.
-      // But since we want to respect order, we might need to clear and insert.
-      // Or upsert with order.
-
-      // First, maybe delete all? Or upsert.
-      // Let's try upserting logic.
       const rows = categories.map((name, index) => ({
         name,
-        sortOrder: index
+        sortorder: index
       }));
 
-      const { error } = await supabase.from('mygourmet_categories').upsert(rows);
+      const { error } = await supabase.from('mygourmet_categories').upsert(rows, { onConflict: 'name' });
       if (error) throw error;
     } catch (e) {
+      console.error("Failed to save categories", e);
+      useLocalStorage = true;
       localStore.set(LS_KEYS.CATEGORIES, categories);
     }
   },
 
   getShoppingList: async (year: number, week: number): Promise<Ingredient[]> => {
-    // Re-use getData/getPlans which handle fallback
     try {
       let plans = await dataService.getPlans();
       let dishes = await dataService.getDishes();
@@ -460,7 +447,6 @@ export const dataService = {
   },
 
   fetchRecipeData: async (url: string): Promise<any> => {
-    // Placeholder. Needs Edge Function or Backend Proxy.
     console.warn("Recipe scraping not implemented for Supabase yet");
     return null;
   }
