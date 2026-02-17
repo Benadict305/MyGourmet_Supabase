@@ -112,7 +112,7 @@ export const dataService = {
         .select(`
           *,
           ingredients:mygourmet_ingredients (*),
-          dish_tags:mygourmet_dish_tags (tagName)
+          dish_tags:mygourmet_dish_tags (tagname)
         `);
 
       if (error) throw error;
@@ -120,7 +120,7 @@ export const dataService = {
       return (data || []).map((d: any) => ({
         ...d,
         ingredients: d.ingredients || [],
-        tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagName) : []
+        tags: d.dish_tags ? d.dish_tags.map((t: any) => t.tagname) : []
       }));
     } catch (e) {
       console.error("Failed to fetch dishes from Supabase", e);
@@ -391,7 +391,7 @@ export const dataService = {
       const { data, error } = await supabase
         .from('mygourmet_categories')
         .select('name')
-        .order('sortOrder', { ascending: true });
+        .order('sortorder', { ascending: true });
 
       if (error) throw error;
 
@@ -419,7 +419,7 @@ export const dataService = {
       // Let's try upserting logic.
       const rows = categories.map((name, index) => ({
         name,
-        sortOrder: index
+        sortorder: index
       }));
 
       const { error } = await supabase.from('mygourmet_categories').upsert(rows);
