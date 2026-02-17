@@ -14,7 +14,17 @@ View your app in AI Studio: https://ai.studio/apps/drive/1K35n8bxi3b_YHY72GzOEn2
 
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   ```sh
+   npm install
+   ```
+
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key (if it's not already set).
+
 3. Run the app:
-   `npm run dev`
+   ```sh
+   npm run dev
+   ```
+
+Your app will be available at `http://localhost:5173`.
+
+The recipe import feature now uses the CORS proxy at `https://cors.bivort.de` and no longer requires a local proxy server to be started.
