@@ -455,12 +455,7 @@ export const dataService = {
     const proxyUrl = `https://cors.bivort.de/${targetUrl}`;
 
     try {
-      const response = await fetch(proxyUrl, {
-         headers: {
-           'X-Requested-With': 'XMLHttpRequest',
-           'Origin': 'https://mygourmet.bivort.de'
-         }
-      });
+      const response = await fetch(proxyUrl);
 
       if (response.status === 403) {
         return { success: false, error: "Zugriff verweigert (403). Die Ziel-Webseite (z.B. Chefkoch.de) blockiert möglicherweise die Anfrage des Proxy-Servers. Versuche es später erneut oder trage die Daten manuell ein." };
@@ -470,9 +465,6 @@ export const dataService = {
       }
 
       const html = await response.text();
-      // DEBUG: Log the received HTML to the console
-      console.log("Vom Proxy empfangener HTML-Inhalt:", html);
-
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
