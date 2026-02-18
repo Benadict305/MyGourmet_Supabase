@@ -95,10 +95,16 @@ const mapDishFromDb = (d: any): Dish => ({
 });
 
 const imageUrlToBase64 = async (url: string): Promise<string> => {
-  if (!url) return '';
+  if (!url || typeof url !== 'string') {
+    console.warn("imageUrlToBase64 received an invalid URL:", url);
+    return '';
+  }
   try {
+    console.log(`Attempting to fetch and convert image to Base64 from URL: ${url}`);
     const targetUrl = url.replace(/^(https?:\/\/)/, '');
     const proxyUrl = `https://cors.bivort.de/${targetUrl}`;
+    console.log(`Using proxy URL: ${proxyUrl}`);
+    
     const response = await fetch(proxyUrl, {
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
@@ -106,18 +112,29 @@ const imageUrlToBase64 = async (url: string): Promise<string> => {
         'Origin': 'https://mygourmet.bivort.de'
       }
     });
+
     if (!response.ok) {
-      throw new Error(`Failed to fetch image with status: ${response.status}`);
+      console.error(`Failed to fetch image. Status: ${response.status} ${response.statusText}`);
+      const responseBody = await response.text();
+      console.error(`Response body from failed image fetch: ${responseBody}`);
+      return '';
     }
+
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
+      reader.onloadend = () => {
+        console.log("Image successfully converted to Base64.");
+        resolve(reader.result as string);
+      };
+      reader.onerror = (error) => {
+        console.error("FileReader error while converting image to Base64:", error);
+        reject(error);
+      };
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.error('Error converting image to Base64:', error);
+    console.error('Exception in imageUrlToBase64:', error);
     return '';
   }
 };
@@ -500,66 +517,69 @@ export const dataService = {
       let tags: string[] = [];
 
       if (url.includes('cookidoo.de')) {
+        console.log("Cookidoo URL detected, adding 'Thermomix' tag.");
         tags.push('Thermomix');
       }
 
       const jsonLdScript = doc.querySelector('script[type="application/ld+json"]');
       if (jsonLdScript) {
         console.log("Found JSON-LD script, parsing data...");
-        const jsonLd = JSON.parse(jsonLdScript.textContent || '{}');
+        try {
+          const jsonLd = JSON.parse(jsonLdScript.textContent || '{}');
+          name = jsonLd.name || '';
 
-        name = jsonLd.name || '';
-        
-        let imageUrl = jsonLd.image;
-        if (Array.isArray(imageUrl)) {
-          imageUrl = imageUrl[0];
-        }
-        if (typeof imageUrl === 'object' && imageUrl !== null) {
-            imageUrl = imageUrl.url;
-        }
-
-        if (imageUrl) {
-            console.log("Found image URL in JSON-LD:", imageUrl);
-            image = await imageUrlToBase64(imageUrl);
-        }
-
-        if (jsonLd.recipeIngredient) {
-          ingredients = jsonLd.recipeIngredient.map((ingString: string) => {
-            const cleanedString = ingString.replace(/&frac12;/g, '1/2').replace(/&frac14;/g, '1/4').replace(/&frac34;/g, '3/4');
-            const parts = cleanedString.split(' ');
-            let amount = '';
-            let unit = '';
-            let name = '';
-
-            if (parts.length >= 3 && (!isNaN(parseFloat(parts[0])) || parts[0].includes('/'))) {
-                amount = parts[0];
-                unit = parts[1];
-                name = parts.slice(2).join(' ');
-            } else if (parts.length === 2 && (!isNaN(parseFloat(parts[0])) || parts[0].includes('/'))) {
-                amount = parts[0];
-                name = parts[1];
-            } else {
-                name = cleanedString;
-            }
-            
-            return {
-              id: generateId(),
-              amount,
-              unit,
-              name
-            };
-          });
-        }
-        
-        if (jsonLd.recipeInstructions) {
-          if (Array.isArray(jsonLd.recipeInstructions)) {
-            notes = jsonLd.recipeInstructions.map((step: any) => step.text || step).join('\n');
-          } else {
-            notes = jsonLd.recipeInstructions;
+          let imageUrl = jsonLd.image;
+          if (Array.isArray(imageUrl)) {
+            imageUrl = imageUrl[0];
           }
+          if (typeof imageUrl === 'object' && imageUrl !== null) {
+            imageUrl = imageUrl.url;
+          }
+
+          if (imageUrl && typeof imageUrl === 'string') {
+            image = await imageUrlToBase64(imageUrl);
+          }
+
+          if (jsonLd.recipeIngredient && Array.isArray(jsonLd.recipeIngredient)) {
+            ingredients = jsonLd.recipeIngredient.map((ingString: string) => {
+              const cleanedString = ingString.replace(/&frac12;/g, '1/2').replace(/&frac14;/g, '1/4').replace(/&frac34;/g, '3/4');
+              const parts = cleanedString.split(' ').filter(p => p); // filter out empty strings
+              let amount = '';
+              let unit = '';
+              let ingredientName = '';
+
+              if (parts.length > 1 && (String(parts[0]).match(/^[\d.,\/]+$/) || String(parts[1]).match(/^[\d.,\/]+$/))) {
+                  amount = parts[0];
+                  unit = parts.length > 2 && !String(parts[1]).match(/^[\d.,\/]+$/) ? parts[1] : '';
+                  ingredientName = unit ? parts.slice(2).join(' ') : parts.slice(1).join(' ');
+              } else {
+                  ingredientName = cleanedString;
+              }
+              
+              return {
+                id: generateId(),
+                amount: amount.trim(),
+                unit: unit.trim(),
+                name: ingredientName.trim()
+              };
+            });
+          }
+          
+          if (jsonLd.recipeInstructions) {
+            if (Array.isArray(jsonLd.recipeInstructions)) {
+              notes = jsonLd.recipeInstructions.map((step: any) => step.text || step).join('\n');
+            } else if (typeof jsonLd.recipeInstructions === 'object' && jsonLd.recipeInstructions.text) {
+              notes = jsonLd.recipeInstructions.text;
+            } else {
+              notes = jsonLd.recipeInstructions;
+            }
+          }
+        } catch(e) {
+            console.error("Error parsing JSON-LD:", e);
         }
       }
 
+      // Fallback strategies if JSON-LD is missing or incomplete
       if (!name) {
         console.log("No recipe name in JSON-LD, trying other selectors...");
         name = doc.querySelector('h1.page-title, .page-title, [property="og:title"]')?.getAttribute('content') || doc.querySelector('h1')?.textContent?.trim() || '';
@@ -585,7 +605,6 @@ export const dataService = {
                     let unit = match?.[2]?.trim() || '';
 
                     if (!amount && unit) {
-                        // This case is for things like "Etwas" or "n. B."
                     } else if (amount && !unit) {
                         const parts = amount.split(/\s+/);
                         if (parts.length > 1 && isNaN(parseFloat(parts[parts.length-1]))) {
@@ -593,7 +612,6 @@ export const dataService = {
                             amount = parts.join(' ');
                         }
                     }
-
                     ingredients.push({
                         id: generateId(),
                         amount: amount,
@@ -612,9 +630,9 @@ export const dataService = {
       }
 
       if (!image) {
+        console.log("No image from JSON-LD, trying meta tags...");
         const metaImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
         if (metaImage) {
-            console.log("Found image URL in meta tag:", metaImage);
             image = await imageUrlToBase64(metaImage);
         }
       }
@@ -623,6 +641,8 @@ export const dataService = {
          console.error("Could not parse recipe data from website.");
          return { success: false, error: "Rezept-Daten konnten nicht automatisch von der Webseite gelesen werden. Bitte manuell eingeben." };
       }
+
+      console.log("Final scraped data being returned:", { name, ingredients, notes, image, tags });
 
       return {
         success: true,
