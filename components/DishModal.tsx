@@ -18,13 +18,11 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
   const [editedDish, setEditedDish] = useState<Partial<Dish>>({});
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
   
-  // Reset state when modal opens
   useEffect(() => {
     if (isOpen && dish) {
       setEditedDish(JSON.parse(JSON.stringify(dish)));
       setIsEditing(isNew);
     } else if (isOpen && isNew) {
-      // Initialize empty dish
       setEditedDish({
         name: '',
         rating: 0,
@@ -32,7 +30,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
         timesCooked: 0,
         notes: '',
         recipeLink: '',
-        tags: ['Hauptgerichte'], // Default tag
+        tags: ['Hauptgerichte'],
       });
       setIsEditing(true);
     }
@@ -44,7 +42,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
 
   const handleSave = () => {
     if (!editedDish.name) return;
-    onSave(editedDish as Dish, true); // True means close modal
+    onSave(editedDish as Dish, true);
   };
 
   const handleDelete = () => {
@@ -63,13 +61,10 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
   const handleRatingChange = (rating: number) => {
     updateField('rating', rating);
     
-    // If we are in "View Mode" (not editing), we want to save the rating immediately
-    // but keep the modal open.
     if (!isEditing) {
       const updatedDish = { ...editedDish, rating } as Dish;
-      // Ensure we have ID and Name at minimum to save
       if (updatedDish.id && updatedDish.name) {
-        onSave(updatedDish, false); // False means don't close modal
+        onSave(updatedDish, false);
       }
     }
   };
@@ -114,13 +109,11 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
 
-          // Set max dimensions
           const maxWidth = 800;
           const maxHeight = 600;
 
           let { width, height } = img;
 
-          // Calculate new dimensions
           if (width > height) {
             if (width > maxWidth) {
               height = (height * maxWidth) / width;
@@ -155,18 +148,23 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
       const recipeData = await dataService.fetchRecipeData(url);
 
       if (recipeData && recipeData.success) {
-        // Update fields only if they are empty
-        if (!editedDish.name && recipeData.name) {
-          updateField('name', recipeData.name);
-        }
-        if ((!editedDish.ingredients || editedDish.ingredients.length === 0) && recipeData.ingredients) {
-          updateField('ingredients', recipeData.ingredients);
-        }
-        if (!editedDish.notes && recipeData.notes) {
-          updateField('notes', recipeData.notes);
-        }
-         // You might want to show a success message
-         alert('Rezeptdaten erfolgreich geladen!');
+        // Use a functional update to ensure we're working with the latest state
+        setEditedDish(prevDish => {
+          const newTags = recipeData.tags || [];
+          const existingTags = prevDish.tags || [];
+          const mergedTags = [...new Set([...existingTags, ...newTags])];
+
+          return {
+            ...prevDish,
+            name: prevDish.name || recipeData.name || '',
+            ingredients: (prevDish.ingredients && prevDish.ingredients.length > 0) ? prevDish.ingredients : recipeData.ingredients || [],
+            notes: prevDish.notes || recipeData.notes || '',
+            image: prevDish.image || recipeData.image || '',
+            tags: mergedTags,
+          };
+        });
+
+        alert('Rezeptdaten erfolgreich geladen!');
 
       } else {
         throw new Error(recipeData.error || 'Unbekannter Fehler beim Verarbeiten des Rezepts');
@@ -207,7 +205,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
         
-        {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white sticky top-0 z-10">
           <h2 className="text-xl font-bold text-slate-800">
             {isNew ? 'Neues Gericht' : (isEditing ? 'Gericht bearbeiten' : editedDish.name)}
@@ -230,10 +227,8 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
           </div>
         </div>
 
-        {/* Scrollable Content */}
         <div className="overflow-y-auto p-6 flex-1">
           
-          {/* Image Section */}
           <div className="mb-6 relative h-48 sm:h-64 bg-slate-100 rounded-xl overflow-hidden group">
             {editedDish.image ? (
               <img src={editedDish.image} alt="Dish" className="w-full h-full object-cover" />
@@ -266,7 +261,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
 
           <div className="space-y-6">
             
-            {/* Name & Rating */}
             <div className="grid gap-4">
               {isEditing ? (
                  <div className="space-y-2">
@@ -297,7 +291,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
               </div>
             </div>
 
-            {/* Tags Section */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <Icons.Tag size={16} /> Kategorien
@@ -333,7 +326,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
               )}
             </div>
 
-            {/* Link & Notes */}
             <div className="grid gap-4 md:grid-cols-2">
                <div className="space-y-2">
                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
@@ -387,7 +379,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                </div>
             </div>
 
-            {/* Ingredients */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-slate-800">Zutaten</h3>
@@ -452,10 +443,8 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
           </div>
         </div>
 
-        {/* Footer Actions */}
         {isEditing && (
           <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between gap-3">
-             {/* Delete Button (Left aligned, only if editing existing dish) */}
              {!isNew ? (
                <button
                  onClick={handleDelete}
@@ -463,7 +452,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                >
                  <Icons.Trash2 size={16} /> <span className="hidden sm:inline">Löschen</span>
                </button>
-             ) : <div />} {/* Spacer if no delete button */}
+             ) : <div />} 
 
              <div className="flex gap-3">
                <button
