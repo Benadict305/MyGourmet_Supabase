@@ -7,6 +7,7 @@ import DishModal from './components/DishModal';
 import MenuPlanView from './components/MenuPlanView';
 import DishPickerModal from './components/DishPickerModal';
 import CategoryModal from './components/CategoryModal';
+import BatchImportModal from './components/BatchImportModal'; // Import the new component
 
 console.log("App.tsx module loaded");
 
@@ -40,6 +41,7 @@ const App: React.FC = () => {
   const [isDishModalOpen, setDishModalOpen] = useState(false);
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [isCreatingNewDish, setIsCreatingNewDish] = useState(false);
+  const [isBatchImportModalOpen, setBatchImportModalOpen] = useState(false);
 
   // Menu Picker State
   const [isPickerOpen, setPickerOpen] = useState(false);
@@ -403,6 +405,13 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-2">
+             <button
+              onClick={() => setBatchImportModalOpen(true)}
+              className="flex items-center justify-center w-9 h-9 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Cookidoo Batch Import"
+            >
+              <Icons.FileDown size={20} />
+            </button>
             {activeTab === 'dishes' && (
               <button
                 onClick={handleCreateDish}
@@ -569,8 +578,16 @@ const App: React.FC = () => {
         isOpen={isCategoryModalOpen}
         onClose={() => setCategoryModalOpen(false)}
         categories={categories}
-        onSave={handleSaveCategories}
+        onSave={.handleSaveCategories}
       />
+      
+      <BatchImportModal
+        isOpen={isBatchImportModalOpen}
+        onClose={() => setBatchImportModalOpen(false)}
+        onImport={(importedDishes) => {
+          setDishes(prev => [...prev, ...importedDishes]);
+        }}
+    />
 
     </div>
   );
