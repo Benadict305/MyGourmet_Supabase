@@ -18,7 +18,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   const handleImport = async () => {
-    const urlList = urls.split('\n').filter(url => url.trim().startsWith('https://www.cookidoo.de'));
+    const urlList = urls.split('\n').filter(url => /^https:\/\/(www\.)?cookidoo\.de/.test(url.trim()));
     if (urlList.length === 0) {
       alert('Bitte füge gültige Cookidoo URLs ein.');
       return;
@@ -70,13 +70,13 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-slate-600">
-            Füge eine oder mehrere Cookidoo Rezept-URLs ein (eine pro Zeile). Es werden nur URLs importiert, die mit "https://www.cookidoo.de" beginnen.
+            Füge eine oder mehrere Cookidoo Rezept-URLs ein (eine pro Zeile). Die URLs müssen mit "https://cookidoo.de" beginnen (www. ist optional).
           </p>
           <textarea
             value={urls}
             onChange={(e) => setUrls(e.target.value)}
             className="w-full h-40 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            placeholder="https://www.cookidoo.de/..."
+            placeholder="https://cookidoo.de/..."
             disabled={isImporting}
           />
           {importLog.length > 0 && (
