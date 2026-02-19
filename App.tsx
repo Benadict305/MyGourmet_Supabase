@@ -578,7 +578,7 @@ const App: React.FC = () => {
         isOpen={isCategoryModalOpen}
         onClose={() => setCategoryModalOpen(false)}
         categories={categories}
-        onSave={.handleSaveCategories}
+        onSave={handleSaveCategories}
       />
       
       <BatchImportModal
