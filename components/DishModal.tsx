@@ -342,7 +342,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                      />
                      <button
                        onClick={handleFetchRecipe}
-                       disabled={!editedDish.recipeLink || isFetchingRecipe}
+                       disabled={isFetchingRecipe || !editedDish.recipeLink?.includes('cookidoo.de')}
                        className="px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                      >
                        {isFetchingRecipe ? (
