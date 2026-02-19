@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icons } from './ui/Icon';
 import { dataService } from '../services/dataService';
 import { Dish } from '../types';
@@ -14,11 +14,27 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
   const [urls, setUrls] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      dataService.getCategories().then(setCategories);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
   const handleImport = async () => {
-    const urlList = urls.split('\n').filter(url => /^https:\/\/(www\.)?cookidoo\.de/.test(url.trim()));
+    const urlList = urls.split('\n').filter(url => /^https?:\/\/(www\.)?cookidoo\.de/.test(url.trim()));
     if (urlList.length === 0) {
       alert('Bitte füge gültige Cookidoo URLs ein.');
       return;
@@ -33,12 +49,13 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
         setImportLog(prev => [...prev, `Importiere: ${url}`]);
         const recipeData = await dataService.fetchRecipeData(url);
         if (recipeData && recipeData.success) {
+          const recipeTags = recipeData.tags || [];
           const newDish: Partial<Dish> = {
             name: recipeData.name || 'Unbenanntes Gericht',
             ingredients: recipeData.ingredients || [],
             notes: recipeData.notes || '',
             image: recipeData.image || '',
-            tags: recipeData.tags || ['Hauptgerichte'],
+            tags: [...new Set([...recipeTags, ...selectedCategories])], 
             recipeLink: url,
             rating: 0,
             timesCooked: 0,
@@ -69,16 +86,36 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
           </button>
         </div>
         <div className="p-6 space-y-4">
-          <p className="text-sm text-slate-600">
-            Füge eine oder mehrere Cookidoo Rezept-URLs ein (eine pro Zeile). Die URLs müssen mit "https://cookidoo.de" beginnen (www. ist optional).
-          </p>
-          <textarea
-            value={urls}
-            onChange={(e) => setUrls(e.target.value)}
-            className="w-full h-40 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-            placeholder="https://cookidoo.de/..."
-            disabled={isImporting}
-          />
+          <div>
+            <p className="text-sm text-slate-600 mb-2">
+              Füge eine oder mehrere Cookidoo Rezept-URLs ein (eine pro Zeile).
+            </p>
+            <textarea
+              value={urls}
+              onChange={(e) => setUrls(e.target.value)}
+              className="w-full h-32 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+              placeholder="https://cookidoo.de/..."
+              disabled={isImporting}
+            />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-slate-800 mb-2">Kategorien zuweisen (optional)</h3>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(category => (
+                <button
+                  key={category}
+                  onClick={() => toggleCategory(category)}
+                  className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                    selectedCategories.includes(category)
+                      ? 'bg-primary-600 text-white hover:bg-primary-700'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
           {importLog.length > 0 && (
             <div className="w-full h-32 p-2 border rounded-lg bg-slate-50 text-xs overflow-y-auto">
               {importLog.map((line, index) => (
