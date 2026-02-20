@@ -397,7 +397,7 @@ const App: React.FC = () => {
     return (
       <button
         onClick={handleSortChange}
-        className="fixed md:absolute top-20 right-6 z-40 flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md border border-slate-200 rounded-full shadow-lg text-slate-700 hover:bg-slate-50 transition-all"
+        className="fixed top-20 md:top-36 right-6 z-40 flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md border border-slate-200 rounded-full shadow-lg text-slate-700 hover:bg-slate-50 transition-all"
         title={sortLabels[sortBy]}
       >
         {sortIcons[sortBy]}
