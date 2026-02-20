@@ -12,6 +12,8 @@ import BatchImportModal from './components/BatchImportModal';
 console.log("App.tsx module loaded");
 
 type SortOption = 'name' | 'rating' | 'lastCooked';
+const sortOptions: SortOption[] = ['name', 'rating', 'lastCooked'];
+
 
 const App: React.FC = () => {
   console.log("App component rendering...");
@@ -373,29 +375,33 @@ const App: React.FC = () => {
     </>
   );
 
-  const renderSortControls = () => {
-    const sortOptions: {id: SortOption, label: string}[] = [
-        { id: 'name', label: 'Alphabetisch' },
-        { id: 'rating', label: 'Bewertung' },
-        { id: 'lastCooked', label: 'Zuletzt gekocht' }
-    ];
+  const handleSortChange = () => {
+    const currentIndex = sortOptions.indexOf(sortBy);
+    const nextIndex = (currentIndex + 1) % sortOptions.length;
+    setSortBy(sortOptions[nextIndex]);
+  };
+
+  const renderSortButton = () => {
+    const sortIcons: {[key in SortOption]: React.ReactElement} = {
+        name: <Icons.SortAlpha size={18} />,
+        rating: <Icons.Star size={16} />,
+        lastCooked: <Icons.Clock size={16} />,
+    };
+
+    const sortLabels: {[key in SortOption]: string} = {
+        name: 'Sortiert nach Name',
+        rating: 'Sortiert nach Bewertung',
+        lastCooked: 'Sortiert nach "Zuletzt gekocht"',
+    };
 
     return (
-        <div className="flex-shrink-0 bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-sm">
-            {sortOptions.map(opt => (
-                <button 
-                    key={opt.id}
-                    onClick={() => setSortBy(opt.id)}
-                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        sortBy === opt.id
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
+      <button
+        onClick={handleSortChange}
+        className="fixed md:absolute top-20 right-6 z-40 flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md border border-slate-200 rounded-full shadow-lg text-slate-700 hover:bg-slate-50 transition-all"
+        title={sortLabels[sortBy]}
+      >
+        {sortIcons[sortBy]}
+      </button>
     );
   }
 
@@ -501,7 +507,9 @@ const App: React.FC = () => {
         ) : (
           <>
             {activeTab === 'dishes' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="relative space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {renderSortButton()}
+                {/* Desktop Toolbar */}
                 <div className={`hidden md:block sticky ${isOffline ? 'top-[117px]' : 'top-20'} z-20 bg-slate-50/95 backdrop-blur -mx-4 px-4 py-4 md:mx-0 md:px-0 md:pt-2 md:pb-4 space-y-4 transition-all`}>
                   <div className="flex flex-col sm:flex-row gap-4 justify-between">
                     <div className="relative flex-1 max-w-md">
@@ -531,10 +539,9 @@ const App: React.FC = () => {
                     </button>
                   </div>
                   <div className="flex justify-between items-center gap-4">
-                     <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-3 overflow-x-auto scrollbar-hide">
+                     <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-3 overflow-x-auto scrollbar-hide pr-16">
                        {renderCategoryButtons()}
                      </div>
-                     {renderSortControls()}
                   </div>
                 </div>
 
@@ -560,9 +567,6 @@ const App: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex justify-center">
-                        {renderSortControls()}
-                      </div>
                       <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                          {renderCategoryButtons()}
                       </div>
@@ -570,7 +574,7 @@ const App: React.FC = () => {
                 </div>
 
                 {filteredAndSortedDishes.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-12 md:pt-0">
                     {filteredAndSortedDishes.map(dish => (
                       <DishCard 
                         key={dish.id} 

@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Utensils, Calendar, Plus, Search, Star, ExternalLink, 
   Trash2, Edit2, X, ChevronRight, ChevronLeft, Image as ImageIcon,
-  ShoppingCart, MoreHorizontal, Check, Clock, Filter, Tag, Share2, Copy, FileDown
+  ShoppingCart, MoreHorizontal, Check, Clock, Filter, Tag, Share2, Copy, FileDown,
+  SortAlpha
 } from 'lucide-react';
 
 export const Icons = {
@@ -26,5 +27,6 @@ export const Icons = {
   Tag,
   Share: Share2,
   Copy,
-  FileDown
+  FileDown,
+  SortAlpha
 };
