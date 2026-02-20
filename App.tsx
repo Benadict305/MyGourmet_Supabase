@@ -7,9 +7,11 @@ import DishModal from './components/DishModal';
 import MenuPlanView from './components/MenuPlanView';
 import DishPickerModal from './components/DishPickerModal';
 import CategoryModal from './components/CategoryModal';
-import BatchImportModal from './components/BatchImportModal'; // Import the new component
+import BatchImportModal from './components/BatchImportModal';
 
 console.log("App.tsx module loaded");
+
+type SortOption = 'name' | 'rating' | 'lastCooked';
 
 const App: React.FC = () => {
   console.log("App component rendering...");
@@ -20,7 +22,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [appError, setAppError] = useState<string | null>(null);
-  
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+
   // Category State
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['Hauptgerichte']);
@@ -67,7 +70,6 @@ const App: React.FC = () => {
     setAppError(null);
     
     try {
-      // Check Backend status first
       const online = await dataService.checkBackendConnection();
       setIsOffline(!online);
 
@@ -160,7 +162,6 @@ const App: React.FC = () => {
     if (pickerTarget) {
       try {
         await dataService.addDishToPlan(pickerTarget.year, pickerTarget.week, dishId);
-        // Refresh dishes to show updated cooking stats
         await refreshDishes();
       } catch (error) {
         alert("Fehler beim Hinzufügen: " + error);
@@ -186,8 +187,6 @@ const App: React.FC = () => {
     );
   };
 
-  // -- Drag and Drop Logic (Async Save) --
-
   const moveCategory = (sourceCat: string, targetCat: string) => {
     setCategories(prev => {
       const idx1 = prev.indexOf(sourceCat);
@@ -201,7 +200,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Debounced save for categories to avoid API spam while dragging
   useEffect(() => {
     const timer = setTimeout(() => {
       if (categories.length > 0) {
@@ -211,7 +209,6 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [categories]);
 
-  // Mouse Drag Handlers
   const handleDragStart = (e: React.DragEvent, category: string) => {
     setDraggedCategory(category);
     e.dataTransfer.effectAllowed = "move";
@@ -227,7 +224,6 @@ const App: React.FC = () => {
     setDraggedCategory(null);
   };
 
-  // Touch Drag Handlers
   const handleTouchStart = (e: React.TouchEvent, category: string) => {
     if (e.touches.length > 1) return;
     touchStartCoord.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -274,7 +270,6 @@ const App: React.FC = () => {
     setDraggedCategory(null);
   };
 
-  // Swipe Handlers for Tab Switching
   const handleSwipeTouchStart = (e: React.TouchEvent) => {
     swipeStartX.current = e.touches[0].clientX;
     swipeStartY.current = e.touches[0].clientY;
@@ -286,17 +281,14 @@ const App: React.FC = () => {
     const deltaX = e.touches[0].clientX - swipeStartX.current;
     const deltaY = e.touches[0].clientY - swipeStartY.current;
 
-    // Only handle horizontal swipes (more horizontal than vertical movement)
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      e.preventDefault(); // Prevent scrolling when swiping horizontally
+      e.preventDefault();
 
       if (deltaX > 0 && activeTab === 'menu') {
-        // Swipe right on menu tab -> go to dishes
         setActiveTab('dishes');
         swipeStartX.current = null;
         swipeStartY.current = null;
       } else if (deltaX < 0 && activeTab === 'dishes') {
-        // Swipe left on dishes tab -> go to menu
         setActiveTab('menu');
         swipeStartX.current = null;
         swipeStartY.current = null;
@@ -309,14 +301,29 @@ const App: React.FC = () => {
     swipeStartY.current = null;
   };
 
-  // Filter dishes
-  const filteredDishes = dishes.filter(d => {
-    const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategories.length === 0 ||
-      (d.tags && selectedCategories.every(tag => d.tags!.includes(tag)));
-    const matchesRarely = showRarelyCooked ? (d.timesCooked <= 3) : true;
-    return matchesSearch && matchesCategory && matchesRarely;
-  });
+  const filteredAndSortedDishes = dishes
+    .filter(d => {
+      const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategories.length === 0 ||
+        (d.tags && selectedCategories.every(tag => d.tags!.includes(tag)));
+      const matchesRarely = showRarelyCooked ? (d.timesCooked <= 3) : true;
+      return matchesSearch && matchesCategory && matchesRarely;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'rating':
+          if (b.rating !== a.rating) return b.rating - a.rating;
+          return a.name.localeCompare(b.name);
+        case 'lastCooked':
+          const aDate = a.lastCooked ? new Date(a.lastCooked).getTime() : 0;
+          const bDate = b.lastCooked ? new Date(b.lastCooked).getTime() : 0;
+          if (bDate !== aDate) return bDate - aDate;
+          return a.name.localeCompare(b.name);
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
 
   const renderCategoryButtons = () => (
     <>
@@ -366,6 +373,32 @@ const App: React.FC = () => {
     </>
   );
 
+  const renderSortControls = () => {
+    const sortOptions: {id: SortOption, label: string}[] = [
+        { id: 'name', label: 'Alphabetisch' },
+        { id: 'rating', label: 'Bewertung' },
+        { id: 'lastCooked', label: 'Zuletzt gekocht' }
+    ];
+
+    return (
+        <div className="flex-shrink-0 bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-sm">
+            {sortOptions.map(opt => (
+                <button 
+                    key={opt.id}
+                    onClick={() => setSortBy(opt.id)}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                        sortBy === opt.id
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    {opt.label}
+                </button>
+            ))}
+        </div>
+    );
+  }
+
   if (appError) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-6 text-center">
@@ -384,7 +417,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       
-      {/* Offline Banner */}
       {isOffline && (
         <div className="bg-orange-100 border-b border-orange-200 text-orange-800 px-4 py-2 text-sm text-center font-medium sticky top-0 z-50 flex items-center justify-center gap-2">
            <Icons.Clock size={16} />
@@ -392,7 +424,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Header */}
       <header className={`bg-white border-b border-slate-200 sticky ${isOffline ? 'top-[37px]' : 'top-0'} z-30 transition-all`}>
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -456,7 +487,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main
         className={`flex-1 max-w-5xl mx-auto w-full p-4 md:p-6 ${activeTab === 'dishes' ? 'pb-40 md:pb-6' : ''}`}
         onTouchStart={handleSwipeTouchStart}
@@ -472,8 +502,7 @@ const App: React.FC = () => {
           <>
             {activeTab === 'dishes' && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* Desktop Toolbar */}
-                <div className={`hidden md:block sticky ${isOffline ? 'top-[117px]' : 'top-20'} z-20 bg-slate-50/95 backdrop-blur -mx-4 px-4 py-4 md:mx-0 md:px-0 md:pt-2 md:pb-4 space-y-3 transition-all`}>
+                <div className={`hidden md:block sticky ${isOffline ? 'top-[117px]' : 'top-20'} z-20 bg-slate-50/95 backdrop-blur -mx-4 px-4 py-4 md:mx-0 md:px-0 md:pt-2 md:pb-4 space-y-4 transition-all`}>
                   <div className="flex flex-col sm:flex-row gap-4 justify-between">
                     <div className="relative flex-1 max-w-md">
                       <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -501,12 +530,14 @@ const App: React.FC = () => {
                       <span>Neues Gericht</span>
                     </button>
                   </div>
-                  <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {renderCategoryButtons()}
+                  <div className="flex justify-between items-center gap-4">
+                     <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-3 overflow-x-auto scrollbar-hide">
+                       {renderCategoryButtons()}
+                     </div>
+                     {renderSortControls()}
                   </div>
                 </div>
 
-                {/* Mobile Toolbar */}
                 <div className="md:hidden fixed bottom-4 left-4 right-4 z-40 flex flex-col gap-2 animate-in slide-in-from-bottom-10 duration-500">
                    <div className="bg-white/90 backdrop-blur-md shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] border border-slate-200 rounded-2xl p-3 space-y-3">
                       <div className="flex gap-2">
@@ -529,16 +560,18 @@ const App: React.FC = () => {
                           )}
                         </div>
                       </div>
+                      <div className="flex justify-center">
+                        {renderSortControls()}
+                      </div>
                       <div onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                          {renderCategoryButtons()}
                       </div>
                    </div>
                 </div>
 
-                {/* Grid */}
-                {filteredDishes.length > 0 ? (
+                {filteredAndSortedDishes.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDishes.map(dish => (
+                    {filteredAndSortedDishes.map(dish => (
                       <DishCard 
                         key={dish.id} 
                         dish={dish} 
@@ -572,7 +605,6 @@ const App: React.FC = () => {
 
       </main>
 
-      {/* Modals */}
       <DishModal
         isOpen={isDishModalOpen}
         onClose={() => setDishModalOpen(false)}

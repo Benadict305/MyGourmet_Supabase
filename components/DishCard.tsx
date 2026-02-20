@@ -8,7 +8,27 @@ interface DishCardProps {
   onAddToMenu: (e: React.MouseEvent) => void;
 }
 
+// Helper function to get ISO week number and year
+const getWeekAndYear = (date: Date): { week: number; year: number } => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return { week: weekNumber, year: d.getUTCFullYear() };
+};
+
 const DishCard: React.FC<DishCardProps> = ({ dish, onClick, onAddToMenu }) => {
+  
+  const renderLastCooked = () => {
+    if (!dish.lastCooked) return null;
+    
+    const { week, year } = getWeekAndYear(new Date(dish.lastCooked));
+    const yearShort = String(year).slice(-2);
+    const weekPadded = String(week).padStart(2, '0');
+    
+    return `, zuletzt KW${weekPadded}/${yearShort}`;
+  }
+
   return (
     <div 
       onClick={onClick}
@@ -36,7 +56,10 @@ const DishCard: React.FC<DishCardProps> = ({ dish, onClick, onAddToMenu }) => {
         <h3 className="font-semibold text-slate-900 line-clamp-1 mb-1">{dish.name}</h3>
         <div className="flex items-center gap-2 text-slate-500 text-xs mt-auto">
           <Icons.Clock size={12} />
-          <span>{dish.timesCooked}x gekocht</span>
+          <span>
+            {dish.timesCooked}x gekocht
+            {dish.timesCooked > 0 && renderLastCooked()}
+          </span>
         </div>
       </div>
 
