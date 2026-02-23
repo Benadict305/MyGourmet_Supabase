@@ -27,6 +27,10 @@ const STAPLE_INGREDIENTS = [
   'knoblauch',
   'agavendicksaft',
   'paprikapulver',
+  'tomatemark',
+  'sambal olek',
+  'lorbeerblatt',
+  'gewürzpaste für gemüsebrühe, selbst gemacht',
 ];
 
 const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, title, dishesWithoutIngredients = [], onOpenDish }) => {
