@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dish, WeeklyPlan, CalendarWeek } from '../types';
+import { Dish, WeeklyPlan, CalendarWeek, Ingredient } from '../types';
 import { dataService } from '../services/dataService';
 import { Icons } from './ui/Icon';
 import ShoppingListModal from './ShoppingListModal';
@@ -11,6 +11,7 @@ interface Props {
   onDishRemoved: () => void;
 }
 
+// Functions to get week numbers and calendar weeks remain unchanged...
 const getWeekNumber = (d: Date): [number, number] => {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -55,8 +56,8 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [activeShoppingWeek, setActiveShoppingWeek] = useState<{year: number, week: number} | null>(null);
-  const [loadingShoppingList, setLoadingShoppingList] = useState(false);
-  const [shoppingListIngredients, setShoppingListIngredients] = useState<any[]>([]);
+  const [shoppingListIngredients, setShoppingListIngredients] = useState<Ingredient[]>([]);
+  const [dishesWithoutIngredients, setDishesWithoutIngredients] = useState<string[]>([]);
 
   const fetchPlans = async () => {
     try {
@@ -70,15 +71,9 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
   useEffect(() => {
     setWeeks(getPlanWeeks());
     fetchPlans();
-    // In a real API, we shouldn't poll every second.
-    // Instead, we rely on parent updates or manual refresh.
-    // However, if we added an item via the modal, the parent might re-render, 
-    // but this component mounts fresh or needs to fetch again.
-    // For now, let's fetch on mount.
-  }, [dishes]); // Re-fetch plans if dishes change (crude way to detect updates from parent)
+  }, [dishes]);
 
-  const getDishesForWeek = (year: number, week: number) => {
-    // API returns plans with combined ID usually, or we search by properties
+  const getDishesForWeek = (year: number, week: number): Dish[] => {
     const plan = plans.find(p => p.id === `${year}-${week}` || (p.year === year && p.week === week));
     if (!plan) return [];
     return plan.dishIds.map(id => dishes.find(d => d.id === id)).filter(Boolean) as Dish[];
@@ -89,7 +84,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
     try {
       await dataService.removeDishFromPlan(year, week, dishId);
       await fetchPlans();
-      onDishRemoved(); // Refresh dishes to show updated cooking stats
+      onDishRemoved();
     } catch (err) {
       alert("Fehler beim Entfernen");
     }
@@ -97,16 +92,21 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
 
   const openShoppingList = async (year: number, week: number) => {
     setActiveShoppingWeek({ year, week });
-    setLoadingShoppingList(true);
     setShoppingListOpen(true);
+
+    const weekDishes = getDishesForWeek(year, week);
+    const dishesMissingIngredients = weekDishes
+      .filter(d => !d.ingredients || d.ingredients.length === 0)
+      .map(d => d.name);
+      
+    setDishesWithoutIngredients(dishesMissingIngredients);
+    
     try {
       const ingredients = await dataService.getShoppingList(year, week);
       setShoppingListIngredients(ingredients);
     } catch(e) {
       console.error(e);
       setShoppingListIngredients([]);
-    } finally {
-      setLoadingShoppingList(false);
     }
   };
 
@@ -118,7 +118,6 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
 
         return (
           <div key={`${wk.year}-${wk.week}`} className={`rounded-2xl border ${wk.isCurrent ? 'border-primary-200 bg-primary-50/30' : 'border-slate-200 bg-white'} shadow-sm overflow-hidden`}>
-            
             <div className={`p-4 flex justify-between items-center ${wk.isCurrent ? 'bg-primary-50' : 'bg-slate-50'} border-b border-slate-100`}>
               <div>
                 <h3 className={`font-bold text-lg ${wk.isCurrent ? 'text-primary-700' : 'text-slate-700'}`}>
@@ -126,7 +125,6 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
                 </h3>
                 <p className="text-xs text-slate-500">{weekDishes.length} / 5 Gerichte geplant</p>
               </div>
-              
               <div className="flex gap-2">
                 {weekDishes.length > 0 && (
                    <button 
@@ -147,7 +145,6 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
                 )}
               </div>
             </div>
-
             <div className="p-4">
               {weekDishes.length === 0 ? (
                 <div className="text-center py-6 text-slate-400 border-2 border-dashed border-slate-100 rounded-xl">
@@ -194,6 +191,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
           onClose={() => setShoppingListOpen(false)}
           ingredients={shoppingListIngredients}
           title={`KW ${activeShoppingWeek.week}`}
+          dishesWithoutIngredients={dishesWithoutIngredients}
         />
       )}
     </div>
