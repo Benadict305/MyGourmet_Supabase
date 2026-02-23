@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Ingredient } from '../types';
 import { Icons } from './ui/Icon';
 
@@ -10,12 +10,46 @@ interface Props {
 }
 
 const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, title }) => {
+  const [checkedItems, setCheckedItems] = useState<string[]>([]);
+
+  const smartIngredients = useMemo(() => {
+    const ingredientsMap = new Map<string, Ingredient>();
+
+    ingredients.forEach(ing => {
+      const normalizedName = ing.name.toLowerCase().trim().replace(/s$/, '').replace(/n$/, '');
+      const unit = ing.unit?.toLowerCase().trim() || '';
+      const key = `${normalizedName}-${unit}`;
+
+      const existingIng = ingredientsMap.get(key);
+
+      if (existingIng) {
+        const currentAmount = parseFloat(existingIng.amount);
+        const newAmount = parseFloat(ing.amount);
+
+        if (!isNaN(currentAmount) && !isNaN(newAmount)) {
+          existingIng.amount = (currentAmount + newAmount).toString();
+        } else {
+          ingredientsMap.set(`${key}-${Math.random()}`, { ...ing });
+        }
+      } else {
+        ingredientsMap.set(key, { ...ing });
+      }
+    });
+
+    return Array.from(ingredientsMap.values());
+  }, [ingredients]);
+
   if (!isOpen) return null;
 
+  const handleToggleChecked = (id: string) => {
+    setCheckedItems(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
   const handleShare = async () => {
-    // Format list as text
-    const textList = ingredients
-      .map(ing => `- ${ing.amount} ${ing.unit} ${ing.name}`)
+    const textList = smartIngredients
+      .map(ing => `- ${ing.amount} ${ing.unit || ''} ${ing.name}`)
       .join('\n');
     
     const shareData = {
@@ -25,10 +59,8 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
 
     try {
       if (navigator.share) {
-        // Native Mobile Share Sheet
         await navigator.share(shareData);
       } else {
-        // Fallback for Desktop: Copy to clipboard
         await navigator.clipboard.writeText(shareData.text);
         alert('Einkaufsliste wurde in die Zwischenablage kopiert!');
       }
@@ -51,30 +83,40 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
         </div>
         
         <div className="overflow-y-auto p-4 flex-1">
-          {ingredients.length === 0 ? (
+          {smartIngredients.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <p>Nichts zu kaufen.</p>
               <p className="text-sm">Füge Gerichte zum Menüplan hinzu.</p>
             </div>
           ) : (
             <ul className="space-y-2">
-              {ingredients.map((ing, idx) => (
-                <li key={`${ing.id}-${idx}`} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors">
-                  <div className="h-5 w-5 rounded border border-slate-300 flex items-center justify-center">
-                    {/* Fake checkbox appearance */}
-                  </div>
-                  <div className="flex-1 flex justify-between">
-                     <span className="text-slate-800">{ing.name}</span>
-                     <span className="text-slate-500 font-medium">{ing.amount} {ing.unit}</span>
-                  </div>
-                </li>
-              ))}
+              {smartIngredients.map((ing, idx) => {
+                const id = `${ing.id}-${idx}`;
+                const isChecked = checkedItems.includes(id);
+                return (
+                  <li 
+                    key={id} 
+                    onClick={() => handleToggleChecked(id)}
+                    className={`flex items-center gap-3 p-2 rounded-lg border border-transparent transition-colors cursor-pointer 
+                                ${isChecked ? 'bg-slate-100' : 'hover:bg-slate-50 hover:border-slate-100'}`}
+                  >
+                    <div className={`h-5 w-5 rounded border flex items-center justify-center transition-colors 
+                                    ${isChecked ? 'bg-primary-600 border-primary-600' : 'border-slate-300'}`}>
+                      {isChecked && <Icons.Check size={14} className="text-white" />}
+                    </div>
+                    <div className="flex-1 flex justify-between">
+                       <span className={`text-slate-800 ${isChecked ? 'line-through text-slate-400' : ''}`}>{ing.name}</span>
+                       <span className={`font-medium ${isChecked ? 'line-through text-slate-400' : 'text-slate-500'}`}>{ing.amount} {ing.unit}</span>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
 
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-between gap-3">
-           {ingredients.length > 0 && (
+           {smartIngredients.length > 0 && (
              <button
                onClick={handleShare}
                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 active:bg-slate-100 transition-colors"
