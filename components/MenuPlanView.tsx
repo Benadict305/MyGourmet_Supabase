@@ -56,16 +56,12 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [activeShoppingWeek, setActiveShoppingWeek] = useState<{year: number, week: number} | null>(null);
-  const [shoppingListIngredients, setShoppingListIngredients] = useState<Ingredient[]>([]);
+  const [shoppingListIngredients, setShoppingListIngredients] = useState<(Ingredient & { dishId: string; dishName: string; })[]>([]);
   const [dishesWithoutIngredients, setDishesWithoutIngredients] = useState<string[]>([]);
 
   const fetchPlans = async () => {
-    try {
-      const p = await dataService.getPlans();
-      setPlans(p);
-    } catch (err) {
-      console.error(err);
-    }
+    const p = await dataService.getPlans();
+    setPlans(p);
   };
 
   useEffect(() => {
@@ -81,34 +77,33 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
 
   const removeDish = async (e: React.MouseEvent, year: number, week: number, dishId: string) => {
     e.stopPropagation();
-    try {
-      await dataService.removeDishFromPlan(year, week, dishId);
-      await fetchPlans();
-      onDishRemoved();
-    } catch (err) {
-      alert("Fehler beim Entfernen");
-    }
+    await dataService.removeDishFromPlan(year, week, dishId);
+    await fetchPlans();
+    onDishRemoved();
   };
 
-  const openShoppingList = async (year: number, week: number) => {
+  const openShoppingList = (year: number, week: number) => {
     setActiveShoppingWeek({ year, week });
-    setShoppingListOpen(true);
-
-    const weekDishes = getDishesForWeek(year, week);
-    const dishesMissingIngredients = weekDishes
-      .filter(d => !d.ingredients || d.ingredients.length === 0)
-      .map(d => d.name);
-      
-    setDishesWithoutIngredients(dishesMissingIngredients);
     
-    try {
-      const ingredients = await dataService.getShoppingList(year, week);
-      setShoppingListIngredients(ingredients);
-    } catch(e) {
-      console.error(e);
-      setShoppingListIngredients([]);
-    }
+    const weekDishes = getDishesForWeek(year, week);
+    const dishesMissingIngredients = weekDishes.filter(d => !d.ingredients || d.ingredients.length === 0).map(d => d.name);
+    setDishesWithoutIngredients(dishesMissingIngredients);
+
+    const ingredientsWithContext = weekDishes.flatMap(dish => 
+        (dish.ingredients || []).map(ing => ({...ing, dishId: dish.id, dishName: dish.name}))
+    );
+
+    setShoppingListIngredients(ingredientsWithContext);
+    setShoppingListOpen(true);
   };
+
+  const handleOpenDishFromModal = (dishId: string) => {
+    const dishToOpen = dishes.find(d => d.id === dishId);
+    if (dishToOpen) {
+      setShoppingListOpen(false);
+      onOpenDish(dishToOpen);
+    }
+  }
 
   return (
     <div className="space-y-8 pb-20">
@@ -192,6 +187,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
           ingredients={shoppingListIngredients}
           title={`KW ${activeShoppingWeek.week}`}
           dishesWithoutIngredients={dishesWithoutIngredients}
+          onOpenDish={handleOpenDishFromModal}
         />
       )}
     </div>
