@@ -132,7 +132,7 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
                 className="p-1 text-slate-400 hover:text-primary-600 rounded-full hover:bg-primary-50 transition-colors"
                 title={`Zu Gericht "${sources[0].dishName}" wechseln`}
             >
-                <Icons.Link size={16} />
+                <Icons.ExternalLink size={16} />
             </button>
         )}
       </li>
