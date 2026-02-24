@@ -1,6 +1,7 @@
 import React from 'react';
 import { Dish } from '../types';
 import { Icons } from './ui/Icon';
+import LazyImage from './LazyImage';
 
 interface DishCardProps {
   dish: Dish;
@@ -36,7 +37,7 @@ const DishCard: React.FC<DishCardProps> = ({ dish, onClick, onAddToMenu }) => {
     >
       <div className="relative h-40 w-full overflow-hidden bg-slate-100">
         {dish.image ? (
-          <img 
+          <LazyImage 
             src={dish.image} 
             alt={dish.name} 
             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"

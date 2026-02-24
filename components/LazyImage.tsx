@@ -14,11 +14,9 @@ const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className }) => {
   const placeholderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log(`LazyImage for ${alt} created, but not yet visible.`);
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          console.log(`LazyImage for ${alt} is now VISIBLE.`);
           setIsVisible(true);
           observer.unobserve(entry.target);
         }
@@ -34,17 +32,13 @@ const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className }) => {
         observer.unobserve(placeholderRef.current);
       }
     };
-  }, [alt]);
+  }, []);
 
   const handleLoad = () => {
-    console.log(`LazyImage for ${alt} has finished LOADING.`);
-    setTimeout(() => {
-        setIsLoading(false);
-    }, 1000); // 1-second delay for testing
+    setIsLoading(false);
   };
 
   const handleError = () => {
-    console.log(`LazyImage for ${alt} FAILED to load.`);
     setHasError(true);
     setIsLoading(false);
   };
