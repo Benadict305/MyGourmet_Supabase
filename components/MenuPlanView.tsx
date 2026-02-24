@@ -3,6 +3,7 @@ import { Dish, WeeklyPlan, CalendarWeek, Ingredient } from '../types';
 import { dataService } from '../services/dataService';
 import { Icons } from './ui/Icon';
 import ShoppingListModal from './ShoppingListModal';
+import LazyImage from './LazyImage';
 
 interface Props {
   dishes: Dish[];
@@ -154,7 +155,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
                     >
                        <div className="h-16 w-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200">
                          {dish.image ? (
-                           <img src={dish.image} alt="" className="w-full h-full object-cover" />
+                           <LazyImage src={dish.image} alt={dish.name} className="w-full h-full object-cover" />
                          ) : <div className="w-full h-full flex items-center justify-center"><Icons.Utensils className="text-slate-400" /></div>}
                        </div>
                        <div className="flex-1 min-w-0 overflow-hidden">
