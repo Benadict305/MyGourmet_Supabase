@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Ingredient } from '../types';
 import { Icons } from './ui/Icon';
 
@@ -84,6 +84,13 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
 
     return { shoppingList, pantryList };
   }, [ingredients]);
+  
+  useEffect(() => {
+    if (isOpen) {
+      const initialChecked = shoppingList.map((item, idx) => `${item.ingredient.name}-${item.ingredient.unit}-${idx}`);
+      setCheckedItems(initialChecked);
+    }
+  }, [isOpen, shoppingList]);
 
   if (!isOpen) return null;
 
@@ -92,15 +99,17 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
   };
 
   const handleShare = async () => {
-    let textList = '';
-    if (dishesWithoutIngredients.length > 0) {
-        textList += `ACHTUNG: Für folgende Gerichte fehlen die Zutaten:\n- ${dishesWithoutIngredients.join('\n- ')}\n\n`;
-    }
-    const mainList = shoppingList.map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`).join('\n');
-    const pantryListText = pantryList.map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name} (ggf. im Vorrat)`).join('\n');
-    textList += `${mainList}\n\nVorräte:\n${pantryListText}`;
+    const mainList = shoppingList
+        .filter((item, idx) => checkedItems.includes(`${item.ingredient.name}-${item.ingredient.unit}-${idx}`))
+        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`).join('\n');
 
-    const shareData = { title: `Einkaufsliste ${title}`, text: `Einkaufsliste für ${title}:\n\n${textList}` };
+    const pantryListText = pantryList
+        .filter((item, idx) => checkedItems.includes(`${item.ingredient.name}-${item.ingredient.unit}-${idx}`))
+        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`).join('\n');
+
+    const textList = [mainList, pantryListText].filter(Boolean).join('\n');
+
+    const shareData = { title: `Einkaufsliste ${title}`, text: textList };
 
     try {
       if (navigator.share) await navigator.share(shareData);
@@ -125,10 +134,10 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
           {isChecked && <Icons.Check size={14} className="text-white" />}
         </div>
         <div className="flex-1 flex justify-between items-center">
-           <span className={`text-slate-800 ${isChecked ? 'line-through text-slate-400' : ''} ${isPantry ? 'text-slate-500' : ''}`}>
+           <span className={`text-slate-800 ${!isChecked ? 'text-slate-400' : ''} ${isPantry ? 'text-slate-500' : ''}`}>
              {ingredient.name} {isPantry && <span className="text-slate-400 text-xs">(ggf. im Vorrat)</span>}
            </span>
-           <span className={`font-medium ${isChecked ? 'line-through text-slate-400' : isPantry ? 'text-slate-400' : 'text-slate-500'}`}>{ingredient.amount} {ingredient.unit}</span>
+           <span className={`font-medium ${!isChecked ? 'text-slate-400' : isPantry ? 'text-slate-400' : 'text-slate-500'}`}>{ingredient.amount} {ingredient.unit}</span>
         </div>
         {onOpenDish && sources.length === 1 && (
             <button 
