@@ -33,7 +33,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ categories, isOpen, onClo
   };
 
   const handleRenameCategory = (oldName: string, newName: string) => {
-    if (newName.trim() && !editedCategories.includes(newName.trim())) {
+    if (newName.trim()) {
       setEditedCategories(editedCategories.map(c => c === oldName ? newName.trim() : c));
     }
   };
