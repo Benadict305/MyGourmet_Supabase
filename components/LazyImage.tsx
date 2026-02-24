@@ -35,7 +35,9 @@ const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className }) => {
   }, []);
 
   const handleLoad = () => {
-    setIsLoading(false);
+    setTimeout(() => {
+        setIsLoading(false);
+    }, 1000); // 1-second delay for testing
   };
 
   const handleError = () => {
