@@ -31,6 +31,8 @@ const STAPLE_INGREDIENTS = [
   'sambal olek',
   'lorbeerblatt',
   'gewürzpaste für gemüsebrühe, selbst gemacht',
+  'bratöl',
+  'tomatenmark',
 ];
 
 const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, title, dishesWithoutIngredients = [], onOpenDish }) => {

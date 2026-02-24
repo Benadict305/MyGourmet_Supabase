@@ -11,7 +11,6 @@ interface Props {
   onDishRemoved: () => void;
 }
 
-// Functions to get week numbers and calendar weeks remain unchanged...
 const getWeekNumber = (d: Date): [number, number] => {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -107,7 +106,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
 
   return (
     <div className="space-y-8 pb-20">
-      {weeks.map((wk) => {
+      {weeks.map((wk, index) => {
         const weekDishes = getDishesForWeek(wk.year, wk.week);
         const isFull = weekDishes.length >= 5;
 
@@ -121,7 +120,7 @@ const MenuPlanView: React.FC<Props> = ({ dishes, onAddDishRequest, onOpenDish, o
                 <p className="text-xs text-slate-500">{weekDishes.length} / 5 Gerichte geplant</p>
               </div>
               <div className="flex gap-2">
-                {weekDishes.length > 0 && (
+                {weekDishes.length > 0 && index === 0 && (
                    <button 
                      onClick={() => openShoppingList(wk.year, wk.week)}
                      className="p-2 bg-white text-slate-600 rounded-lg border border-slate-200 hover:text-primary-600 hover:border-primary-200 transition-colors shadow-sm"
