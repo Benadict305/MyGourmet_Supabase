@@ -81,9 +81,18 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-xl font-bold">Cookidoo Batch Import</h2>
-          <button onClick={onClose} className="p-2 text-slate-500 hover:text-red-500">
-            <Icons.X size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImport}
+              disabled={isImporting}
+              className="px-6 py-2 bg-primary-600 text-white font-medium rounded-lg shadow-sm hover:bg-primary-700 disabled:opacity-50"
+            >
+              {isImporting ? 'Importiere...' : 'Import starten'}
+            </button>
+            <button onClick={onClose} className="p-2 text-slate-500 hover:text-red-500">
+              <Icons.X size={24} />
+            </button>
+          </div>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -131,13 +140,6 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
             className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg"
           >
             Schließen
-          </button>
-          <button
-            onClick={handleImport}
-            disabled={isImporting}
-            className="px-6 py-2 bg-primary-600 text-white font-medium rounded-lg shadow-sm hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isImporting ? 'Importiere...' : 'Import starten'}
           </button>
         </div>
       </div>

@@ -65,4 +65,22 @@ export const MOCK_DISHES: Dish[] = [
   },
 ];
 
-export const MOCK_PLANS: WeeklyPlan[] = [];
+// Add mock data for weekly plans for better offline/preview usability
+const today = new Date();
+const year = today.getFullYear();
+const week = Math.ceil((((today.getTime() - new Date(year, 0, 1).getTime()) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+
+export const MOCK_PLANS: WeeklyPlan[] = [
+    {
+        id: `${year}-${week}`,
+        year: year,
+        week: week,
+        dishIds: ['1', '3'] // Spaghetti Carbonara & Linseneintopf
+    },
+    {
+        id: `${year}-${week + 1}`,
+        year: year,
+        week: week + 1,
+        dishIds: ['2', '4', '1'] // Thai Curry, Pizza, & nochmal Carbonara
+    }
+];

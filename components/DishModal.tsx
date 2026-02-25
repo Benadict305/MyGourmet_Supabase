@@ -11,9 +11,10 @@ interface DishModalProps {
   onDelete?: (dishId: string) => void;
   isNew?: boolean;
   categories?: string[];
+  onOpenBatchImport: () => void;
 }
 
-const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, onDelete, isNew = false, categories = [] }) => {
+const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, onDelete, isNew = false, categories = [], onOpenBatchImport }) => {
   const [isEditing, setIsEditing] = useState(isNew);
   const [editedDish, setEditedDish] = useState<Partial<Dish>>({});
   const [isFetchingRecipe, setIsFetchingRecipe] = useState(false);
@@ -332,7 +333,7 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                     <Icons.ExternalLink size={16} /> Rezept Link
                  </label>
                  {isEditing ? (
-                   <div className="flex gap-2">
+                   <div className="flex gap-2 items-center">
                      <input
                       type="url"
                       value={editedDish.recipeLink || ''}
@@ -343,14 +344,14 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                      <button
                        onClick={handleFetchRecipe}
                        disabled={isFetchingRecipe || !editedDish.recipeLink?.includes('cookidoo.de')}
-                       className="px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                       className="p-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                       title="Rezept von Cookidoo laden"
                      >
                        {isFetchingRecipe ? (
-                         <Icons.Clock size={14} className="animate-spin" />
+                         <Icons.Clock size={16} className="animate-spin" />
                        ) : (
-                         <Icons.Plus size={14} />
+                         <Icons.FileDown size={16} />
                        )}
-                       {isFetchingRecipe ? 'Lade...' : 'Laden'}
                      </button>
                    </div>
                  ) : (
@@ -359,6 +360,22 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                        {editedDish.recipeLink}
                      </a>
                    ) : <span className="text-slate-400 italic text-sm">Kein Link</span>
+                 )}
+                 {isNew && isEditing && (
+                    <div className="flex items-center justify-center my-2">
+                        <div className="flex-grow border-t border-slate-200"></div>
+                        <span className="flex-shrink mx-2 text-xs text-slate-400">ODER</span>
+                        <div className="flex-grow border-t border-slate-200"></div>
+                    </div>
+                 )}
+                 {isNew && isEditing && (
+                    <button
+                        onClick={onOpenBatchImport}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
+                    >
+                        <Icons.FileDown size={16} />
+                        Cookidoo Batch Import
+                    </button>
                  )}
                </div>
 

@@ -14,7 +14,6 @@ console.log("App.tsx module loaded");
 type SortOption = 'name' | 'rating' | 'lastCooked';
 const sortOptions: SortOption[] = ['name', 'rating', 'lastCooked'];
 
-
 const App: React.FC = () => {
   console.log("App component rendering...");
   
@@ -117,7 +116,8 @@ const App: React.FC = () => {
       
       if (closeModal) {
         setDishModalOpen(false);
-      } else {
+      }
+       else {
         setSelectedDish(dishData);
       }
     } catch (error) {
@@ -374,6 +374,14 @@ const App: React.FC = () => {
           {cat.name}
         </button>
       ))}
+       <div className="w-px h-6 bg-slate-300 mx-1 flex-shrink-0" />
+      <button
+        onClick={() => setCategoryModalOpen(true)}
+        title="Kategorien bearbeiten"
+        className="flex items-center justify-center w-8 h-8 rounded-full border transition-colors bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+      >
+        <Icons.Edit2 size={14} />
+      </button>
     </>
   );
 
@@ -444,13 +452,6 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-2">
-             <button
-              onClick={() => setBatchImportModalOpen(true)}
-              className="flex items-center justify-center w-9 h-9 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Cookidoo Batch Import"
-            >
-              <Icons.FileDown size={20} />
-            </button>
             {activeTab === 'dishes' && (
               <button
                 onClick={handleCreateDish}
@@ -460,14 +461,6 @@ const App: React.FC = () => {
                 <Icons.Plus size={20} />
               </button>
             )}
-
-            <button
-              onClick={() => setCategoryModalOpen(true)}
-              className="flex items-center justify-center w-9 h-9 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Kategorien bearbeiten"
-            >
-              <Icons.More size={20} />
-            </button>
 
             <nav className="flex gap-1 bg-slate-100 p-1 rounded-xl">
               <button
@@ -619,6 +612,7 @@ const App: React.FC = () => {
         onSave={handleSaveDish}
         onDelete={handleDeleteDish}
         categories={categories.map(c => c.name)}
+        onOpenBatchImport={() => setBatchImportModalOpen(true)}
       />
 
       <DishPickerModal

@@ -1,15 +1,15 @@
-
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    // Only throw if we are trying to use it, but maybe just log a warning so the app doesn't crash entirely if keys are missing (though it won't work).
-    console.warn('Supabase URL or Anon Key is missing. Check your .env file.');
+let supabaseClient: SupabaseClient | null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.warn('Supabase URL or Anon Key is missing. The app will run in offline/mock mode.');
+  supabaseClient = null;
 }
 
-export const supabase = createClient(
-    supabaseUrl || '',
-    supabaseAnonKey || ''
-);
+export const supabase = supabaseClient;
