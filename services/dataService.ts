@@ -466,24 +466,58 @@ export const dataService = {
     }
 
     try {
-      const { data: existingCategories, error: fetchError } = await supabase.from('mygourmet_categories').select('id');
+      // Fetch existing categories from DB
+      const { data: existingCategories, error: fetchError } = await supabase.from('mygourmet_categories').select('id, name, sortorder');
       if (fetchError) throw fetchError;
 
       const existingIds = existingCategories.map(c => c.id);
       const incomingIds = categories.map(c => c.id);
 
+      // 1. Delete categories that are no longer in the list
       const toDelete = existingIds.filter(id => !incomingIds.includes(id));
       if (toDelete.length > 0) {
         const { error: deleteError } = await supabase.from('mygourmet_categories').delete().in('id', toDelete);
         if (deleteError) throw deleteError;
       }
 
-      const toUpsert = categories.map(c => ({ id: c.id, name: c.name, sortorder: c.sortOrder }));
-      const { error: upsertError } = await supabase.from('mygourmet_categories').upsert(toUpsert, { onConflict: 'id' });
-      if (upsertError) throw upsertError;
+      // 2. Insert new categories
+      const toInsert = categories
+        .filter(c => !existingIds.includes(c.id))
+        .map(c => ({ id: c.id, name: c.name, sortorder: c.sortOrder }));
+      if (toInsert.length > 0) {
+        const { error: insertError } = await supabase.from('mygourmet_categories').insert(toInsert);
+        if (insertError) throw insertError;
+      }
+
+      // 3. Update existing categories
+      const toUpdate = categories
+        .filter(c => existingIds.includes(c.id))
+        .map(c => {
+          const existing = existingCategories.find(ec => ec.id === c.id);
+          // Only update if name or sort order has actually changed
+          if (existing && (existing.name !== c.name || existing.sortorder !== c.sortOrder)) {
+            return { id: c.id, name: c.name, sortorder: c.sortOrder };
+          }
+          return null;
+        })
+        .filter(Boolean) as { id: string; name: string; sortorder: number }[];
+
+      if (toUpdate.length > 0) {
+        for (const cat of toUpdate) {
+            const { error: updateError } = await supabase
+                .from('mygourmet_categories')
+                .update({ name: cat.name, sortorder: cat.sortorder })
+                .eq('id', cat.id);
+            if (updateError) {
+                console.error(`Error updating category ${cat.id}:`, updateError);
+                throw updateError; // stop on first error
+            }
+        }
+      }
 
     } catch (e) {
       console.error("Failed to save categories", e);
+      // Revert to local storage on failure
       useLocalStorage = true;
       localStore.set(LS_KEYS.CATEGORIES, categories);
     }
