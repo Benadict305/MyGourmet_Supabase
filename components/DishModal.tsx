@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Dish, Ingredient } from '../types';
 import { Icons } from './ui/Icon';
@@ -210,7 +211,16 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
           <h2 className="text-xl font-bold text-slate-800">
             {isNew ? 'Neues Gericht' : (isEditing ? 'Gericht bearbeiten' : editedDish.name)}
           </h2>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {isNew && (
+              <button
+                  onClick={onOpenBatchImport}
+                  title="Cookidoo Batch Import"
+                  className="p-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-full transition-colors"
+              >
+                  <Icons.FileDown size={20} />
+              </button>
+            )}
             {!isEditing && (
               <button 
                 onClick={() => setIsEditing(true)}
@@ -360,22 +370,6 @@ const DishModal: React.FC<DishModalProps> = ({ dish, isOpen, onClose, onSave, on
                        {editedDish.recipeLink}
                      </a>
                    ) : <span className="text-slate-400 italic text-sm">Kein Link</span>
-                 )}
-                 {isNew && isEditing && (
-                    <div className="flex items-center justify-center my-2">
-                        <div className="flex-grow border-t border-slate-200"></div>
-                        <span className="flex-shrink mx-2 text-xs text-slate-400">ODER</span>
-                        <div className="flex-grow border-t border-slate-200"></div>
-                    </div>
-                 )}
-                 {isNew && isEditing && (
-                    <button
-                        onClick={onOpenBatchImport}
-                        className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
-                    >
-                        <Icons.FileDown size={16} />
-                        Cookidoo Batch Import
-                    </button>
                  )}
                </div>
 

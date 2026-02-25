@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Icons } from './ui/Icon';
 import { dataService } from '../services/dataService';
-import { Dish } from '../types';
+import { Dish, Category } from '../types';
 
 interface BatchImportModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
   const [urls, setUrls] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   useEffect(() => {
@@ -25,11 +25,11 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
 
   if (!isOpen) return null;
 
-  const toggleCategory = (category: string) => {
+  const toggleCategory = (categoryName: string) => {
     setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
+      prev.includes(categoryName)
+        ? prev.filter(c => c !== categoryName)
+        : [...prev, categoryName]
     );
   };
 
@@ -112,15 +112,15 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({ isOpen, onClose, on
             <div className="flex flex-wrap gap-2">
               {categories.map(category => (
                 <button
-                  key={category}
-                  onClick={() => toggleCategory(category)}
+                  key={category.id}
+                  onClick={() => toggleCategory(category.name)}
                   className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                    selectedCategories.includes(category)
+                    selectedCategories.includes(category.name)
                       ? 'bg-primary-600 text-white hover:bg-primary-700'
                       : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                   }`}
                 >
-                  {category}
+                  {category.name}
                 </button>
               ))}
             </div>
