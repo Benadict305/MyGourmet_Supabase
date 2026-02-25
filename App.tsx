@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Dish, ViewTab } from './types';
+import { Dish, ViewTab, Category } from './types';
 import { dataService } from './services/dataService';
 import { Icons } from './components/ui/Icon';
 import DishCard from './components/DishCard';
@@ -27,7 +27,7 @@ const App: React.FC = () => {
   const [sortBy, setSortBy] = useState<SortOption>('name');
 
   // Category State
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['Hauptgerichte']);
   const [showRarelyCooked, setShowRarelyCooked] = useState(false);
   
@@ -171,7 +171,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveCategories = async (newCategories: string[]) => {
+  const handleSaveCategories = async (newCategories: Category[]) => {
     try {
       setCategories(newCategories);
       await dataService.saveCategories(newCategories);
@@ -180,25 +180,27 @@ const App: React.FC = () => {
     }
   };
 
-  const toggleCategory = (category: string) => {
+  const toggleCategory = (category: Category) => {
     if (draggedCategory) return;
     setSelectedCategories(prev => 
-      prev.includes(category) 
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
+      prev.includes(category.name) 
+        ? prev.filter(c => c !== category.name)
+        : [...prev, category.name]
     );
   };
 
   const moveCategory = (sourceCat: string, targetCat: string) => {
     setCategories(prev => {
-      const idx1 = prev.indexOf(sourceCat);
-      const idx2 = prev.indexOf(targetCat);
-      if (idx1 === -1 || idx2 === -1 || idx1 === idx2) return prev;
-      
-      const newOrder = [...prev];
-      newOrder.splice(idx1, 1);
-      newOrder.splice(idx2, 0, sourceCat);
-      return newOrder;
+        const sourceIndex = prev.findIndex(c => c.name === sourceCat);
+        const targetIndex = prev.findIndex(c => c.name === targetCat);
+
+        if (sourceIndex === -1 || targetIndex === -1) return prev;
+
+        const reordered = [...prev];
+        const [moved] = reordered.splice(sourceIndex, 1);
+        reordered.splice(targetIndex, 0, moved);
+
+        return reordered.map((c, i) => ({ ...c, sortOrder: i }));
     });
   };
 
@@ -211,27 +213,27 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [categories]);
 
-  const handleDragStart = (e: React.DragEvent, category: string) => {
-    setDraggedCategory(category);
+  const handleDragStart = (e: React.DragEvent, category: Category) => {
+    setDraggedCategory(category.name);
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDragOver = (e: React.DragEvent, targetCategory: string) => {
+  const handleDragOver = (e: React.DragEvent, targetCategory: Category) => {
     e.preventDefault(); 
     if (!draggedCategory) return;
-    moveCategory(draggedCategory, targetCategory);
+    moveCategory(draggedCategory, targetCategory.name);
   };
 
   const handleDragEnd = () => {
     setDraggedCategory(null);
   };
 
-  const handleTouchStart = (e: React.TouchEvent, category: string) => {
+  const handleTouchStart = (e: React.TouchEvent, category: Category) => {
     if (e.touches.length > 1) return;
     touchStartCoord.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     
     touchTimer.current = setTimeout(() => {
-      setDraggedCategory(category);
+      setDraggedCategory(category.name);
       if (navigator.vibrate) navigator.vibrate(50);
     }, 500); 
   };
@@ -353,8 +355,8 @@ const App: React.FC = () => {
       </button>
       {categories.map(cat => (
         <button
-          key={cat}
-          data-category={cat}
+          key={cat.id}
+          data-category={cat.name}
           draggable="true"
           onDragStart={(e) => handleDragStart(e, cat)}
           onDragOver={(e) => handleDragOver(e, cat)}
@@ -364,12 +366,12 @@ const App: React.FC = () => {
           onTouchEnd={handleTouchEnd}
           onClick={() => toggleCategory(cat)}
           className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all whitespace-nowrap cursor-grab active:cursor-grabbing select-none ${
-            selectedCategories.includes(cat)
+            selectedCategories.includes(cat.name)
               ? 'bg-primary-600 text-white border-primary-600'
               : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-          } ${draggedCategory === cat ? 'opacity-40 scale-95 border-dashed border-slate-400' : ''}`}
+          } ${draggedCategory === cat.name ? 'opacity-40 scale-95 border-dashed border-slate-400' : ''}`}
         >
-          {cat}
+          {cat.name}
         </button>
       ))}
     </>
@@ -616,7 +618,7 @@ const App: React.FC = () => {
         isNew={isCreatingNewDish}
         onSave={handleSaveDish}
         onDelete={handleDeleteDish}
-        categories={categories}
+        categories={categories.map(c => c.name)}
       />
 
       <DishPickerModal

@@ -1,12 +1,5 @@
 import { Dish, WeeklyPlan } from './types';
 
-export const DISH_CATEGORIES = [
-  'Nicht allergenfrei', 'Arbeit Aufläufe', 'Eintop', 'Baby', 'Kalorienreduziert',
-  'Getränke', 'Frühstück', 'Pasten & Co', 'Hauptgerichte', 'Fisch', 'Nachtisch',
-  'Aufstriche', 'Besondere Fleischgerichte', 'Suppen', 'Beilagen', 'Snacks',
-  'Salate', 'Qinoa', 'Reis', 'Nudeln', 'Backen', 'Currys'
-];
-
 export const MOCK_DISHES: Dish[] = [
   {
     id: '1',

@@ -25,6 +25,12 @@ export interface WeeklyPlan {
   dishIds: string[]; // Max 5 dishes
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
 export type ViewTab = 'dishes' | 'menu';
 
 export interface CalendarWeek {

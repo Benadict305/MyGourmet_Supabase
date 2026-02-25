@@ -1,40 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { Icons } from './ui/Icon';
+import { Category } from '../types';
+import { generateId } from '../services/dataService';
 
 interface CategoryModalProps {
-  categories: string[];
+  categories: Category[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (categories: string[]) => void;
+  onSave: (categories: Category[]) => void;
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({ categories, isOpen, onClose, onSave }) => {
-  const [editedCategories, setEditedCategories] = useState<string[]>([]);
+  const [editedCategories, setEditedCategories] = useState<Category[]>([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setEditedCategories([...categories]);
+      setEditedCategories([...categories].sort((a, b) => a.sortOrder - b.sortOrder));
     }
   }, [isOpen, categories]);
 
   if (!isOpen) return null;
 
   const handleAddCategory = () => {
-    if (newCategoryName.trim() && !editedCategories.includes(newCategoryName.trim())) {
-      setEditedCategories([...editedCategories, newCategoryName.trim()]);
+    if (newCategoryName.trim() && !editedCategories.some(c => c.name === newCategoryName.trim())) {
+      const newCategory: Category = {
+        id: generateId(),
+        name: newCategoryName.trim(),
+        sortOrder: editedCategories.length
+      };
+      setEditedCategories([...editedCategories, newCategory]);
       setNewCategoryName('');
     }
   };
 
-  const handleRemoveCategory = (category: string) => {
-    setEditedCategories(editedCategories.filter(c => c !== category));
+  const handleRemoveCategory = (id: string) => {
+    setEditedCategories(editedCategories.filter(c => c.id !== id));
   };
 
-  const handleRenameCategory = (oldName: string, newName: string) => {
+  const handleRenameCategory = (id: string, newName: string) => {
     if (newName.trim()) {
-      setEditedCategories(editedCategories.map(c => c === oldName ? newName.trim() : c));
+      setEditedCategories(editedCategories.map(c => c.id === id ? { ...c, name: newName.trim() } : c));
     }
   };
 
@@ -47,12 +54,11 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ categories, isOpen, onClo
     e.preventDefault();
     if (draggedIndex === null || draggedIndex === targetIndex) return;
 
-    const newCategories = [...editedCategories];
-    const draggedItem = newCategories[draggedIndex];
-    newCategories.splice(draggedIndex, 1);
-    newCategories.splice(targetIndex, 0, draggedItem);
+    const reordered = [...editedCategories];
+    const [moved] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
 
-    setEditedCategories(newCategories);
+    setEditedCategories(reordered.map((c, i) => ({ ...c, sortOrder: i })));
     setDraggedIndex(targetIndex);
   };
 
@@ -113,12 +119,12 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ categories, isOpen, onClo
             ) : (
               editedCategories.map((category, index) => (
                 <CategoryItem
-                  key={index}
+                  key={category.id}
                   index={index}
                   category={category}
                   isDragged={draggedIndex === index}
-                  onRemove={() => handleRemoveCategory(category)}
-                  onRename={(newName) => handleRenameCategory(category, newName)}
+                  onRemove={() => handleRemoveCategory(category.id)}
+                  onRename={(newName) => handleRenameCategory(category.id, newName)}
                   onDragStart={(e) => handleDragStart(e, index)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
@@ -152,7 +158,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ categories, isOpen, onClo
 // Component for individual category item with inline editing
 const CategoryItem: React.FC<{
   index: number;
-  category: string;
+  category: Category;
   isDragged: boolean;
   onRemove: () => void;
   onRename: (newName: string) => void;
@@ -161,17 +167,17 @@ const CategoryItem: React.FC<{
   onDragEnd: () => void;
 }> = ({ index, category, isDragged, onRemove, onRename, onDragStart, onDragOver, onDragEnd }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(category);
+  const [editValue, setEditValue] = useState(category.name);
 
   const handleSaveEdit = () => {
-    if (editValue.trim() && editValue.trim() !== category) {
+    if (editValue.trim() && editValue.trim() !== category.name) {
       onRename(editValue.trim());
     }
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditValue(category);
+    setEditValue(category.name);
     setIsEditing(false);
   };
 
@@ -215,7 +221,7 @@ const CategoryItem: React.FC<{
         </>
       ) : (
         <>
-          <span className="flex-1 text-slate-700">{category}</span>
+          <span className="flex-1 text-slate-700">{category.name}</span>
           <button
             onClick={() => setIsEditing(true)}
             className="p-1 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded"

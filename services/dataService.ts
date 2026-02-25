@@ -1,5 +1,5 @@
-import { Dish, WeeklyPlan, Ingredient } from '../types';
-import { DISH_CATEGORIES, MOCK_DISHES } from '../constants';
+import { Dish, WeeklyPlan, Ingredient, Category } from '../types';
+import { MOCK_DISHES } from '../mockData';
 import { supabase } from '../lib/supabase';
 
 console.log("Initializing dataService (Supabase)...");
@@ -53,7 +53,30 @@ const initLocalStorage = () => {
       safeStorage.setItem(LS_KEYS.PLANS, JSON.stringify([]));
     }
     if (!safeStorage.getItem(LS_KEYS.CATEGORIES)) {
-      safeStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify(DISH_CATEGORIES));
+      safeStorage.setItem(LS_KEYS.CATEGORIES, JSON.stringify([
+        { id: generateId(), name: 'Hauptgerichte', sortOrder: 0 },
+        { id: generateId(), name: 'Suppen', sortOrder: 1 },
+        { id: generateId(), name: 'Salate', sortOrder: 2 },
+        { id: generateId(), name: 'Nachtisch', sortOrder: 3 },
+        { id: generateId(), name: 'Frühstück', sortOrder: 4 },
+        { id: generateId(), name: 'Snacks', sortOrder: 5 },
+        { id: generateId(), name: 'Beilagen', sortOrder: 6 },
+        { id: generateId(), name: 'Backen', sortOrder: 7 },
+        { id: generateId(), name: 'Getränke', sortOrder: 8 },
+        { id: generateId(), name: 'Nicht allergenfrei', sortOrder: 9 },
+        { id: generateId(), name: 'Arbeit Aufläufe', sortOrder: 10 },
+        { id: generateId(), name: 'Eintop', sortOrder: 11 },
+        { id: generateId(), name: 'Baby', sortOrder: 12 },
+        { id: generateId(), name: 'Kalorienreduziert', sortOrder: 13 },
+        { id: generateId(), name: 'Pasten & Co', sortOrder: 14 },
+        { id: generateId(), name: 'Fisch', sortOrder: 15 },
+        { id: generateId(), name: 'Aufstriche', sortOrder: 16 },
+        { id: generateId(), name: 'Besondere Fleischgerichte', sortOrder: 17 },
+        { id: generateId(), name: 'Qinoa', sortOrder: 18 },
+        { id: generateId(), name: 'Reis', sortOrder: 19 },
+        { id: generateId(), name: 'Nudeln', sortOrder: 20 },
+        { id: generateId(), name: 'Currys', sortOrder: 21 },
+      ]));
     }
   } catch (e) {
     console.error("Failed to init storage", e);
@@ -409,43 +432,52 @@ export const dataService = {
     }
   },
 
-  getCategories: async (): Promise<string[]> => {
+  getCategories: async (): Promise<Category[]> => {
     if (useLocalStorage) {
-      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);
-      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;
+      const stored = localStore.get<Category[]>(LS_KEYS.CATEGORIES);
+      return (stored && stored.length > 0) ? stored : [];
     }
 
     try {
       const { data, error } = await supabase
         .from('mygourmet_categories')
-        .select('name')
-        .order('sortorder', { ascending: true });
+        .select('id, name, sortOrder')
+        .order('sortOrder', { ascending: true });
 
       if (error) throw error;
-      if (!data || data.length === 0) return DISH_CATEGORIES;
-      return data.map((c: any) => c.name);
+      if (!data || data.length === 0) return [];
+      return data;
     } catch (e) {
       console.error("Failed to get categories", e);
       useLocalStorage = true;
-      const stored = localStore.get<string[]>(LS_KEYS.CATEGORIES);
-      return (stored && stored.length > 0) ? stored : DISH_CATEGORIES;
+      const stored = localStore.get<Category[]>(LS_KEYS.CATEGORIES);
+      return (stored && stored.length > 0) ? stored : [];
     }
   },
 
-  saveCategories: async (categories: string[]): Promise<void> => {
+  saveCategories: async (categories: Category[]): Promise<void> => {
     if (useLocalStorage) {
       localStore.set(LS_KEYS.CATEGORIES, categories);
       return;
     }
 
     try {
-      const rows = categories.map((name, index) => ({
-        name,
-        sortorder: index
-      }));
+      const { data: existingCategories, error: fetchError } = await supabase.from('mygourmet_categories').select('id');
+      if (fetchError) throw fetchError;
 
-      const { error } = await supabase.from('mygourmet_categories').upsert(rows, { onConflict: 'name' });
-      if (error) throw error;
+      const existingIds = existingCategories.map(c => c.id);
+      const incomingIds = categories.map(c => c.id);
+
+      const toDelete = existingIds.filter(id => !incomingIds.includes(id));
+      if (toDelete.length > 0) {
+        const { error: deleteError } = await supabase.from('mygourmet_categories').delete().in('id', toDelete);
+        if (deleteError) throw deleteError;
+      }
+
+      const toUpsert = categories.map(c => ({ id: c.id, name: c.name, sortOrder: c.sortOrder }));
+      const { error: upsertError } = await supabase.from('mygourmet_categories').upsert(toUpsert, { onConflict: 'id' });
+      if (upsertError) throw upsertError;
+
     } catch (e) {
       console.error("Failed to save categories", e);
       useLocalStorage = true;
