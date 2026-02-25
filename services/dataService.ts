@@ -441,10 +441,14 @@ export const dataService = {
     try {
       const { data, error } = await supabase
         .from('mygourmet_categories')
-        .select('id, name, sortOrder')
-        .order('sortOrder', { ascending: true });
+        .select('id, name, sortOrder:sortorder')
+        .order('sortorder', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching categories:", error);
+        throw error;
+      }
+
       if (!data || data.length === 0) return [];
       return data;
     } catch (e) {
@@ -474,7 +478,7 @@ export const dataService = {
         if (deleteError) throw deleteError;
       }
 
-      const toUpsert = categories.map(c => ({ id: c.id, name: c.name, sortOrder: c.sortOrder }));
+      const toUpsert = categories.map(c => ({ id: c.id, name: c.name, sortorder: c.sortOrder }));
       const { error: upsertError } = await supabase.from('mygourmet_categories').upsert(toUpsert, { onConflict: 'id' });
       if (upsertError) throw upsertError;
 
