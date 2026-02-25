@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Ingredient } from '../types';
 import { Icons } from './ui/Icon';
@@ -100,23 +101,52 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
     setCheckedItems(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   };
 
-  const handleShare = async () => {
+  const generateShoppingListText = () => {
     const mainList = shoppingList
         .filter((item, idx) => checkedItems.includes(`${item.ingredient.name}-${item.ingredient.unit}-${idx}`))
-        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`).join('\n');
+        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`.trim()).join('\n');
 
     const pantryListText = pantryList
         .filter((item, idx) => checkedItems.includes(`${item.ingredient.name}-${item.ingredient.unit}-${idx}`))
-        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`).join('\n');
+        .map(item => `- ${item.ingredient.amount} ${item.ingredient.unit || ''} ${item.ingredient.name}`.trim()).join('\n');
 
     const textList = [mainList, pantryListText].filter(Boolean).join('\n');
+    return textList;
+  };
 
+  const handleShare = async () => {
+    const textList = generateShoppingListText();
+    if (!textList) {
+        alert("Nichts zum Teilen ausgewählt.");
+        return;
+    }
     const shareData = { title: `Einkaufsliste ${title}`, text: textList };
 
     try {
-      if (navigator.share) await navigator.share(shareData);
-      else { await navigator.clipboard.writeText(shareData.text); alert('Einkaufsliste wurde in die Zwischenablage kopiert!'); }
-    } catch (err) { console.error('Error sharing:', err); }
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else { 
+        await navigator.clipboard.writeText(shareData.text); 
+        alert('Einkaufsliste wurde in die Zwischenablage kopiert!'); 
+      }
+    } catch (err) { 
+      console.error('Error sharing:', err); 
+    }
+  };
+
+  const handleCopyToGemini = async () => {
+    const textList = generateShoppingListText();
+    if (!textList) {
+        alert("Nichts zum Kopieren ausgewählt.");
+        return;
+    }
+    try {
+      await navigator.clipboard.writeText(textList);
+      window.open('https://gemini.google.com/gem/e1f8c5b000c5', '_blank');
+    } catch (err) {
+      console.error('Error copying to clipboard:', err);
+      alert('Fehler beim Kopieren in die Zwischenablage.');
+    }
   };
 
   const renderListItem = (item: any, idx: number, isPantry = false) => {
@@ -190,16 +220,24 @@ const ShoppingListModal: React.FC<Props> = ({ ingredients, isOpen, onClose, titl
           )}
         </div>
 
-        <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-between gap-3">
-           {(shoppingList.length > 0 || pantryList.length > 0) && (
-             <button onClick={handleShare} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 active:bg-slate-100 transition-colors">
-               {navigator.share ? <Icons.Share size={16} /> : <Icons.Copy size={16} />}
-               {navigator.share ? 'Teilen' : 'Kopieren'}
-             </button>
-           )}
-           <button onClick={onClose} className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 ml-auto">
-             Schließen
-           </button>
+        <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-between items-center gap-3">
+          <div className="flex gap-2">
+            {(shoppingList.length > 0 || pantryList.length > 0) && (
+              <>
+                <button onClick={handleShare} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  {navigator.share ? <Icons.Share size={16} /> : <Icons.Copy size={16} />}
+                  {navigator.share ? 'Teilen' : 'Kopieren'}
+                </button>
+                <button onClick={handleCopyToGemini} title="In Zwischenablage kopieren und an Gemini senden" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <Icons.Sparkles size={16} />
+                  An Gemini
+                </button>
+              </>
+            )}
+          </div>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800">
+            Schließen
+          </button>
         </div>
       </div>
     </div>

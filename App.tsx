@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Dish, ViewTab, Category } from './types';
 import { dataService } from './services/dataService';
@@ -378,7 +379,7 @@ const App: React.FC = () => {
       <button
         onClick={() => setCategoryModalOpen(true)}
         title="Kategorien bearbeiten"
-        className="flex items-center justify-center w-8 h-8 rounded-full border transition-colors bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+        className="flex items-center justify-center h-8 px-3 rounded-full border transition-colors bg-white text-slate-600 border-slate-200 hover:border-slate-300"
       >
         <Icons.Edit2 size={14} />
       </button>
